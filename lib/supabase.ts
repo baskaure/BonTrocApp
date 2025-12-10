@@ -6,26 +6,9 @@ import Constants from 'expo-constants';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || Constants.expoConfig?.extra?.supabaseUrl;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || Constants.expoConfig?.extra?.supabaseAnonKey;
 
-// Debug pour voir ce qui est chargé
-console.log('Supabase Config Check:', {
-  hasUrl: !!supabaseUrl,
-  hasKey: !!supabaseAnonKey,
-  urlLength: supabaseUrl?.length || 0,
-  keyLength: supabaseAnonKey?.length || 0,
-  urlPreview: supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'MISSING',
-});
-
+// Éviter d'afficher des secrets ou d'exploser l'app au démarrage.
 if (!supabaseUrl || !supabaseAnonKey) {
-  const error = `Missing Supabase environment variables. 
-  Please check your .env file contains:
-  EXPO_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-  EXPO_PUBLIC_SUPABASE_ANON_KEY=your_key_here
-  
-  Current values:
-  URL: ${supabaseUrl ? 'Found' : 'MISSING'}
-  KEY: ${supabaseAnonKey ? 'Found' : 'MISSING'}`;
-  console.error(error);
-  throw new Error(error);
+  throw new Error('Configuration Supabase manquante. Vérifiez EXPO_PUBLIC_SUPABASE_URL et EXPO_PUBLIC_SUPABASE_ANON_KEY.');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -59,6 +42,8 @@ export type User = {
   role: 'user' | 'moderator' | 'admin' | 'banned';
   verification_status?: 'none' | 'pending' | 'verified' | 'rejected';
   verification_document_url?: string;
+  notification_settings?: Record<string, boolean>;
+  status?: string;
   created_at: string;
 };
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import * as Linking from 'expo-linking';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
@@ -13,14 +13,15 @@ SplashScreen.preventAutoHideAsync();
 function RootLayoutNav() {
   const { user, loading } = useAuth();
   const segments = useSegments();
+  const pathname = usePathname();
   const router = useRouter();
   const [isReady, setIsReady] = useState(false);
 
+  // Gérer le splash screen
   useEffect(() => {
     const prepare = async () => {
       try {
         if (!loading) {
-          await new Promise(resolve => setTimeout(resolve, 1500));
           await SplashScreen.hideAsync();
           setIsReady(true);
         }
@@ -34,21 +35,36 @@ function RootLayoutNav() {
     prepare();
   }, [loading]);
 
+  // Gérer la navigation basée sur l'authentification
   useEffect(() => {
     if (!isReady || loading) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
     const inSplashGroup = segments[0] === '(splash)';
+    const isOnAuthPage = pathname === '/auth' || pathname?.startsWith('/auth/');
+    const isOnLandingPage = pathname === '/landing';
 
     // La page splash gère sa propre redirection
     if (inSplashGroup) return;
 
-    if (!user && !inAuthGroup) {
-      router.replace('/landing');
-    } else if (user && inAuthGroup) {
-      router.replace('/');
-    }
-  }, [user, segments, isReady, loading, router]);
+    // Utiliser un petit délai pour s'assurer que le router est prêt
+    const timer = setTimeout(() => {
+      try {
+        // Rediriger vers home si connecté et sur une page auth ou landing
+        if (user && (isOnAuthPage || isOnLandingPage)) {
+          router.replace('/');
+        }
+        // Rediriger vers landing si pas connecté et sur une page protégée
+        else if (!user && !isOnAuthPage && !isOnLandingPage) {
+          router.replace('/landing');
+        }
+      } catch (error) {
+        // Ignorer les erreurs de navigation si le router n'est pas encore prêt
+        console.warn('Navigation error (router not ready):', error);
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [user, segments, pathname, isReady, loading, router]);
 
   return (
     <Stack screenOptions={{ headerShown: false, animation: 'none' }} initialRouteName="(splash)">
@@ -71,13 +87,7 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   useEffect(() => {
-    // Start auto refresh when app mounts
-    supabase.auth.startAutoRefresh();
-
-    // Tells Supabase Auth to continuously refresh the session automatically if
-    // the app is in the foreground. When this is added, you will continue to receive
-    // `onAuthStateChange` events with the `TOKEN_REFRESHED` or `SIGNED_OUT` event
-    // if the user's session is terminated. This should only be registered once.
+    // Gérer le rafraîchissement automatique de la session
     const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
       if (state === 'active') {
         supabase.auth.startAutoRefresh();
@@ -86,18 +96,19 @@ export default function RootLayout() {
       }
     });
 
-    // Gérer les deep links OAuth - Supabase redirige vers l'app via deep link
-    const handleDeepLink = async (event: { url: string }) => {
+    // Gérer les deep links OAuth
+    const handleDeepLink = (event: { url: string }) => {
       const { url } = event;
       console.log('Deep link received in _layout:', url);
       
+      // Ne pas interférer avec les deep links OAuth
+      // Laisser les composants individuels les gérer
       if (url.includes('/auth/callback') || url.includes('access_token') || url.includes('refresh_token')) {
-        // Le callback sera géré par la page auth/callback.tsx via expo-router
-        console.log('OAuth callback deep link detected');
+        console.log('OAuth callback deep link detected, letting auth components handle it');
       }
     };
 
-    // Écouter les deep links initiaux (quand l'app s'ouvre depuis un lien)
+    // Écouter l'URL initiale
     Linking.getInitialURL().then((url) => {
       if (url) {
         console.log('Initial URL:', url);
@@ -105,7 +116,7 @@ export default function RootLayout() {
       }
     });
 
-    // Écouter les deep links suivants (quand l'app est déjà ouverte)
+    // Écouter les nouveaux deep links
     const linkingSubscription = Linking.addEventListener('url', handleDeepLink);
 
     return () => {

@@ -7,6 +7,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { Settings, LogOut, Star, Edit2, X, Check, Mail, Phone, MapPin, Calendar, Shield, Camera, ImageUp, Loader2, CheckCircle, Clock, XCircle } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type ReviewWithReviewer = Review & {
@@ -117,22 +118,27 @@ export default function ProfileScreen() {
       const file = result.assets[0];
       const fileExt = file.uri.split('.').pop() || 'jpg';
       const fileName = `${type}/${user.id}-${Date.now()}.${fileExt}`;
+      const mime = file.mimeType || `image/${fileExt}`;
 
-      const formData = new FormData();
-      formData.append('file', {
-        uri: file.uri,
-        type: `image/${fileExt}`,
-        name: fileName,
-      } as any);
+      if (!mime.startsWith('image/')) {
+        throw new Error('Format de fichier non supporté. Images uniquement.');
+      }
 
-      const { data: { publicUrl }, error: uploadError } = await supabase.storage
+      const info = await FileSystem.getInfoAsync(file.uri);
+      const size = info.size || file.fileSize;
+      const maxBytes = 5 * 1024 * 1024; // 5 Mo
+      if (size && size > maxBytes) {
+        throw new Error('Image trop volumineuse (max 5 Mo).');
+      }
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-media')
         .upload(fileName, {
           uri: file.uri,
-          type: `image/${fileExt}`,
+          type: mime,
         } as any, {
           upsert: true,
-          contentType: `image/${fileExt}`,
+          contentType: mime,
         });
 
       if (uploadError) throw uploadError;
@@ -189,6 +195,8 @@ export default function ProfileScreen() {
     }
   };
 
+  const { colors } = useTheme();
+
   const handleSignOut = async () => {
     Alert.alert(
       'Déconnexion',
@@ -199,8 +207,13 @@ export default function ProfileScreen() {
           text: 'Déconnexion',
           style: 'destructive',
           onPress: async () => {
-            await signOut();
-            router.replace('/landing');
+            try {
+              await signOut();
+              // La redirection sera gérée automatiquement par _layout.tsx
+              // via le useEffect qui écoute les changements de user
+            } catch (err: any) {
+              Alert.alert('Erreur', err.message || 'Erreur lors de la déconnexion');
+            }
           },
         },
       ]
@@ -210,8 +223,6 @@ export default function ProfileScreen() {
   if (!user) {
     return null;
   }
-
-  const { colors } = useTheme();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>

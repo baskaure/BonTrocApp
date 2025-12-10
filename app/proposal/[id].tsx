@@ -16,6 +16,7 @@ export default function ProposalDetailScreen() {
   const { colors } = useTheme();
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -25,6 +26,7 @@ export default function ProposalDetailScreen() {
 
   async function loadProposal() {
     setLoading(true);
+    setError(null);
     try {
       const { data, error } = await supabase
         .from('proposals')
@@ -41,6 +43,7 @@ export default function ProposalDetailScreen() {
       setProposal(data);
     } catch (error) {
       console.error('Error loading proposal:', error);
+      setError('Impossible de charger cette proposition.');
     } finally {
       setLoading(false);
     }
@@ -64,7 +67,7 @@ export default function ProposalDetailScreen() {
           <Text style={[styles.backButtonText, { color: colors.textSecondary }]}>Retour</Text>
         </TouchableOpacity>
         <View style={styles.centerContainer}>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Proposition non trouvée</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{error || 'Proposition non trouvée'}</Text>
         </View>
       </SafeAreaView>
     );

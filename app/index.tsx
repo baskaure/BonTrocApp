@@ -27,6 +27,7 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading) {
@@ -48,15 +49,16 @@ export default function HomeScreen() {
   }, [filterType, filterMode, filterCategory, searchQuery]);
 
   async function loadCategories() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('categories')
       .select('*')
       .order('sort_order');
-    if (data) setCategories(data);
+    if (!error && data) setCategories(data);
   }
 
   async function loadListings() {
     if (!refreshing) setLoading(true);
+    setError(null);
     try {
       let query = supabase
         .from('listings')
@@ -90,6 +92,7 @@ export default function HomeScreen() {
       setListings(data || []);
     } catch (error) {
       console.error('Error loading listings:', error);
+      setError('Impossible de charger les annonces. Vérifiez votre connexion puis réessayez.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -208,6 +211,7 @@ export default function HomeScreen() {
           </View>
         ) : listings.length === 0 ? (
           <View style={styles.emptyContainer}>
+          {error && <Text style={[styles.emptyText, { color: colors.error }]}>{error}</Text>}
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Aucune annonce trouvée</Text>
             <TouchableOpacity
               onPress={() => setShowCreateModal(true)}

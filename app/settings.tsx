@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Switch, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
@@ -29,6 +29,15 @@ export default function SettingsScreen() {
     emailWeeklyDigest: false,
   });
 
+  useEffect(() => {
+    if (user?.notification_settings) {
+      setNotificationSettings((prev) => ({
+        ...prev,
+        ...user.notification_settings,
+      }));
+    }
+  }, [user]);
+
   const handlePasswordChange = async () => {
     setError('');
     setSuccess('');
@@ -38,8 +47,8 @@ export default function SettingsScreen() {
       return;
     }
 
-    if (passwordData.newPassword.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères');
+    if (passwordData.newPassword.length < 10) {
+      setError('Le mot de passe doit contenir au moins 10 caractères');
       return;
     }
 

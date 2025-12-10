@@ -15,6 +15,7 @@ export default function ProposalsScreen() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'sent' | 'received'>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -26,6 +27,7 @@ export default function ProposalsScreen() {
     if (!user) return;
 
     if (!refreshing) setLoading(true);
+    setError(null);
     try {
       let query = supabase
         .from('proposals')
@@ -51,6 +53,7 @@ export default function ProposalsScreen() {
       setProposals(data || []);
     } catch (error) {
       console.error('Error loading proposals:', error);
+      setError('Impossible de charger les propositions. Réessayez plus tard.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -98,6 +101,12 @@ export default function ProposalsScreen() {
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.text }]}>Mes propositions</Text>
       </View>
+
+      {error && (
+        <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
+          <Text style={{ color: colors.error }}>{error}</Text>
+        </View>
+      )}
 
       <View style={[styles.filterTabs, { borderBottomColor: colors.border }]}>
         {['all', 'sent', 'received'].map((filterType) => (
@@ -227,6 +236,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 16,
+  },
+  errorBox: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
   },
   emptyContainer: {
     alignItems: 'center',

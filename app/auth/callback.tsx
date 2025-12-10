@@ -9,18 +9,25 @@ export default function AuthCallback() {
   const params = useLocalSearchParams();
 
   useEffect(() => {
-    const handleAuthCallback = async () => {
+    const handleAuthCallback = async (url?: string) => {
       try {
         // Attendre un peu pour que l'URL soit complètement chargée
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 300));
 
-        // Récupérer l'URL depuis les paramètres ou le deep link
-        let url = params.url as string;
+        // Récupérer l'URL depuis les paramètres, le deep link, ou l'argument
+        if (!url) {
+          url = params.url as string;
+        }
         
         if (!url) {
           // Essayer de récupérer depuis le deep link actuel
           const initialUrl = await Linking.getInitialURL();
-          url = initialUrl || Linking.createURL('/auth/callback');
+          url = initialUrl || undefined;
+        }
+
+        if (!url) {
+          console.warn('No URL found in callback, waiting for deep link...');
+          return;
         }
 
         console.log('Processing OAuth callback:', url);
@@ -88,7 +95,20 @@ export default function AuthCallback() {
       }
     };
 
+    // Essayer de traiter le callback immédiatement
     handleAuthCallback();
+
+    // Écouter les deep links en temps réel (au cas où le callback arrive après le montage)
+    const subscription = Linking.addEventListener('url', (event) => {
+      console.log('Deep link received in callback:', event.url);
+      if (event.url.includes('/auth/callback') || event.url.includes('access_token') || event.url.includes('refresh_token')) {
+        handleAuthCallback(event.url);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [params, router]);
 
   return (
