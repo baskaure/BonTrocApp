@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
-import { X, Package, Truck, CheckCircle, Clock, AlertCircle } from 'lucide-react-native';
+import { X, Package, Truck, CheckCircle, Clock, AlertCircle, FileText } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { ContractModal } from './ContractModal';
 
 type ExchangeTrackerProps = {
   exchange: any;
@@ -25,17 +26,62 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeLoading, setDisputeLoading] = useState(false);
+  const [showContractModal, setShowContractModal] = useState(false);
 
   const proposal = exchange.contract?.proposal;
   const isFromUser = proposal?.from_user_id === user?.id;
   const currentStepIndex = steps.findIndex(s => s.id === exchange.status);
 
-  const canMarkAsInProgress = exchange.status === 'not_started';
+  // Le contrat doit être actif (signé par les deux parties) pour démarrer l'échange
+  const contractIsActive = exchange.contract?.status === 'active';
+  const canMarkAsInProgress = exchange.status === 'not_started' && contractIsActive;
   const canMarkAsDelivered = exchange.status === 'in_progress';
   const canConfirm = exchange.status === 'delivered' && exchange.delivered_by !== user?.id;
   const canOpenDispute = exchange.status === 'delivered' || exchange.status === 'in_progress';
 
+  useEffect(() => {
+    if (visible && exchange && user) {
+      // Marquer les notifications d'échange comme lues quand on ouvre le tracker
+      markExchangeNotificationsAsRead();
+    }
+  }, [visible, exchange?.id, user?.id]);
+
+  async function markExchangeNotificationsAsRead() {
+    if (!exchange || !user) return;
+    
+    try {
+      const { data: updated, error } = await supabase
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .eq('type', 'exchange_update')
+        .eq('related_id', exchange.id)
+        .is('read_at', null)
+        .select();
+      
+      if (error) {
+        // Si la table n'existe pas, on ignore silencieusement
+        if (error.code !== 'PGRST205') {
+          console.error('Error marking exchange notifications as read:', error);
+        }
+      } else if (updated && updated.length > 0) {
+        console.log(`Marked ${updated.length} exchange notifications as read for exchange ${exchange.id}`);
+      }
+    } catch (err: any) {
+      // Ignorer les erreurs si la table n'existe pas
+      if (err?.code !== 'PGRST205') {
+        console.error('Error marking exchange notifications as read:', err);
+      }
+    }
+  }
+
   async function handleStartExchange() {
+    // Vérifier que le contrat est bien actif
+    if (!contractIsActive) {
+      setError('Le contrat doit être signé par les deux parties avant de démarrer l\'échange.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -46,12 +92,52 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
         .eq('id', exchange.id);
 
       if (updateError) throw updateError;
+
+      // Créer une notification pour l'autre partie
+      await createExchangeUpdateNotification('in_progress');
+
       onUpdate();
       onClose();
     } catch (err: any) {
       setError(err.message || 'Erreur lors du démarrage');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function createExchangeUpdateNotification(status: string) {
+    if (!user || !exchange.contract?.proposal) return;
+
+    try {
+      const proposal = exchange.contract.proposal;
+      const otherUserId = proposal.from_user_id === user.id ? proposal.to_user_id : proposal.from_user_id;
+      const statusMessages: Record<string, string> = {
+        'in_progress': 'L\'échange a démarré',
+        'delivered': 'Votre échange a été marqué comme livré',
+        'confirmed': 'Votre échange a été confirmé',
+      };
+
+      const { data: notifData, error: notifError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: otherUserId,
+          type: 'exchange_update',
+          message: statusMessages[status] || 'Mise à jour de votre échange',
+          related_id: exchange.id,
+        })
+        .select();
+
+      if (notifError) {
+        if (notifError.code === 'PGRST205') {
+          console.warn('Table notifications does not exist. Please run the SQL script.');
+        } else {
+          console.error('Error creating exchange notification:', notifError);
+        }
+      } else if (notifData) {
+        console.log('Exchange notification created:', notifData[0]?.id, 'for status:', status);
+      }
+    } catch (err) {
+      console.error('Exception creating exchange notification:', err);
     }
   }
 
@@ -76,6 +162,10 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
         .eq('id', exchange.id);
 
       if (updateError) throw updateError;
+
+      // Créer une notification pour l'autre partie
+      await createExchangeUpdateNotification('delivered');
+
       onUpdate();
       onClose();
     } catch (err: any) {
@@ -109,6 +199,10 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
         .eq('id', exchange.id);
 
       if (updateError) throw updateError;
+
+      // Créer une notification pour l'autre partie
+      await createExchangeUpdateNotification('confirmed');
+
       onUpdate();
       onClose();
     } catch (err: any) {
@@ -233,6 +327,14 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
             )}
 
             <View style={styles.actions}>
+              {exchange.status === 'not_started' && !contractIsActive && (
+                <View style={[styles.warningBox, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
+                  <Text style={[styles.warningText, { color: '#92400E' }]}>
+                    Le contrat doit être signé par les deux parties avant de démarrer l'échange.
+                  </Text>
+                </View>
+              )}
+
               {canMarkAsInProgress && (
                 <TouchableOpacity
                   style={styles.actionButton}
@@ -322,6 +424,18 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
                 </>
               )}
 
+              {exchange.contract && (
+                <TouchableOpacity
+                  style={[styles.contractButton, { backgroundColor: '#F0F9FF', borderColor: '#0EA5E9' }]}
+                  onPress={() => setShowContractModal(true)}
+                >
+                  <FileText size={20} color="#0EA5E9" />
+                  <Text style={[styles.contractButtonText, { color: '#0EA5E9' }]}>
+                    Voir et signer le contrat
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               {exchange.dispute && (
                 <View style={styles.disputeInfo}>
                   <AlertCircle size={20} color="#EF4444" />
@@ -337,6 +451,18 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
           </ScrollView>
         </View>
       </View>
+
+      {exchange.contract && (
+        <ContractModal
+          contract={exchange.contract}
+          visible={showContractModal}
+          onClose={() => setShowContractModal(false)}
+          onAccepted={() => {
+            setShowContractModal(false);
+            onUpdate();
+          }}
+        />
+      )}
     </Modal>
   );
 }
@@ -515,6 +641,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  contractButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  contractButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  contractButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  contractButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
   disputeInfo: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -532,6 +686,16 @@ const styles = StyleSheet.create({
   disputeInfoText: {
     fontSize: 14,
     color: '#991B1B',
+  },
+  warningBox: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  warningText: {
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 

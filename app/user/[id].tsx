@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/theme';
 import { supabase, User, Listing, Review } from '@/lib/supabase';
 import { ArrowLeft, MapPin, Calendar, Star } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BottomNav } from '@/components/BottomNav';
 
 type ReviewWithReviewer = Review & {
   reviewer?: { display_name: string; avatar_url?: string };
@@ -97,7 +98,7 @@ export default function PublicProfileScreen() {
       </TouchableOpacity>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.profileCard}>
+        <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           {user.banner_url ? (
             <Image source={{ uri: user.banner_url }} style={styles.banner} />
           ) : (
@@ -168,31 +169,31 @@ export default function PublicProfileScreen() {
                 <Text style={[styles.tagsLabel, { color: colors.textSecondary }]}>Compétences</Text>
                 <View style={styles.tags}>
                   {user.skills.map((skill) => (
-                    <View key={skill} style={[styles.tag, styles.skillTag, { backgroundColor: colors.successLight }]}>
-                      <Text style={[styles.tagText, styles.skillTagText, { color: colors.success }]}>{skill}</Text>
+                    <View key={skill} style={[styles.tag, { backgroundColor: colors.successLight }]}>
+                      <Text style={[styles.tagText, { color: colors.success }]}>{skill}</Text>
                     </View>
                   ))}
                 </View>
               </View>
             )}
 
-            <View style={styles.stats}>
+            <View style={[styles.stats, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
               <View style={styles.stat}>
-                <Text style={styles.statValue}>{listings.length}</Text>
+                <Text style={[styles.statValue, { color: colors.primary }]}>{listings.length}</Text>
                 <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Annonces</Text>
               </View>
               <View style={styles.stat}>
-                <Text style={styles.statValue}>{reviews.length || '-'}</Text>
+                <Text style={[styles.statValue, { color: colors.primary }]}>{reviews.length || '-'}</Text>
                 <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Avis</Text>
               </View>
               <View style={styles.stat}>
                 {avgRating ? (
                   <View style={styles.statRating}>
                     <Star size={20} color="#F59E0B" fill="#F59E0B" />
-                    <Text style={styles.statValue}>{avgRating}</Text>
+                    <Text style={[styles.statValue, { color: colors.primary }]}>{avgRating}</Text>
                   </View>
                 ) : (
-                  <Text style={styles.statValue}>-</Text>
+                  <Text style={[styles.statValue, { color: colors.primary }]}>-</Text>
                 )}
                 <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Note</Text>
               </View>
@@ -207,19 +208,19 @@ export default function PublicProfileScreen() {
                   {listings.map((listing) => (
                     <TouchableOpacity
                       key={listing.id}
-                      style={styles.listingCard}
+                      style={[styles.listingCard, { backgroundColor: colors.background }]}
                       onPress={() => router.push(`/listing/${listing.id}`)}
                     >
                       {listing.media && listing.media[0] ? (
                         <Image source={{ uri: listing.media[0].url }} style={styles.listingImage} />
                       ) : (
-                        <View style={styles.listingImagePlaceholder}>
+                        <View style={[styles.listingImagePlaceholder, { backgroundColor: colors.primary }]}>
                           <Text style={styles.listingImageText}>
                             {listing.type === 'service' ? 'Service' : 'Produit'}
                           </Text>
                         </View>
                       )}
-                      <Text style={styles.listingTitle} numberOfLines={2}>
+                      <Text style={[styles.listingTitle, { color: colors.text }]} numberOfLines={2}>
                         {listing.title}
                       </Text>
                     </TouchableOpacity>
@@ -291,6 +292,8 @@ export default function PublicProfileScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <BottomNav />
     </SafeAreaView>
   );
 }
@@ -298,7 +301,6 @@ export default function PublicProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   centerContainer: {
     flex: 1,
@@ -314,21 +316,18 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    color: '#64748B',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 100,
   },
   profileCard: {
-    backgroundColor: '#FFF',
     borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   banner: {
     width: '100%',
@@ -348,7 +347,6 @@ const styles = StyleSheet.create({
     height: 96,
     borderRadius: 48,
     borderWidth: 4,
-    borderColor: '#FFF',
     marginTop: -48,
   },
   avatarPlaceholder: {
@@ -359,7 +357,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
-    borderColor: '#FFF',
     marginTop: -48,
   },
   avatarText: {
@@ -374,12 +371,10 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#1E293B',
     marginBottom: 4,
   },
   username: {
     fontSize: 15,
-    color: '#64748B',
     marginBottom: 8,
   },
   rating: {
@@ -389,11 +384,9 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 14,
-    color: '#64748B',
   },
   bio: {
     fontSize: 15,
-    color: '#475569',
     lineHeight: 22,
     marginBottom: 16,
   },
@@ -408,7 +401,6 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 14,
-    color: '#64748B',
   },
   tagsSection: {
     marginBottom: 16,
@@ -416,7 +408,6 @@ const styles = StyleSheet.create({
   tagsLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748B',
     marginBottom: 8,
   },
   tags: {
@@ -425,30 +416,26 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tag: {
-    backgroundColor: '#E0F2FE',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
   tagText: {
     fontSize: 13,
-    color: '#19ADFA',
     fontWeight: '600',
   },
   skillTag: {
-    backgroundColor: '#D1FAE5',
+    // Background color will be set dynamically
   },
   skillTagText: {
-    color: '#059669',
+    // Color will be set dynamically
   },
   stats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
     marginBottom: 16,
   },
   stat: {
@@ -462,17 +449,14 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#19ADFA',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#64748B',
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1E293B',
     marginBottom: 12,
   },
   listingsSection: {
@@ -485,20 +469,20 @@ const styles = StyleSheet.create({
   },
   listingCard: {
     width: '48%',
-    backgroundColor: '#F8FAFC',
     borderRadius: 12,
     overflow: 'hidden',
   },
   listingImage: {
     width: '100%',
     height: 120,
+    borderRadius: 8,
   },
   listingImagePlaceholder: {
     width: '100%',
     height: 120,
-    backgroundColor: '#19ADFA',
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 8,
   },
   listingImageText: {
     color: '#FFF',
@@ -508,7 +492,6 @@ const styles = StyleSheet.create({
   listingTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1E293B',
     padding: 12,
   },
   reviewsSection: {
@@ -518,9 +501,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   reviewCard: {
-    backgroundColor: '#F8FAFC',
     padding: 12,
     borderRadius: 12,
+    borderWidth: 1,
   },
   reviewHeader: {
     flexDirection: 'row',
@@ -552,7 +535,6 @@ const styles = StyleSheet.create({
   reviewerName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1E293B',
     marginBottom: 4,
   },
   reviewStars: {
@@ -561,7 +543,6 @@ const styles = StyleSheet.create({
   },
   reviewComment: {
     fontSize: 14,
-    color: '#475569',
     lineHeight: 20,
     marginBottom: 8,
   },
@@ -572,22 +553,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   reviewTag: {
-    backgroundColor: '#E0F2FE',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
   },
   reviewTagText: {
     fontSize: 11,
-    color: '#19ADFA',
   },
   reviewDate: {
     fontSize: 12,
-    color: '#94A3B8',
   },
   emptyText: {
     fontSize: 14,
-    color: '#64748B',
     textAlign: 'center',
     paddingVertical: 32,
   },

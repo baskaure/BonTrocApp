@@ -5,8 +5,6 @@ import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { supabase, Listing, Category } from '@/lib/supabase';
 import { ListingCard } from '@/components/ListingCard';
-import { CreateListingModal } from '@/components/CreateListingModal';
-import { ListingDetailModal } from '@/components/ListingDetailModal';
 import { BottomNav } from '@/components/BottomNav';
 import { Filter } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,8 +17,6 @@ export default function HomeScreen() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'service' | 'product'>('all');
   const [filterMode, setFilterMode] = useState<'all' | 'remote' | 'on_site' | 'both'>('all');
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
@@ -132,7 +128,7 @@ export default function HomeScreen() {
           <Text style={[styles.title, { color: colors.text }]}>Annonces</Text>
           <View style={styles.headerActions}>
             <NotificationBell />
-            <TouchableOpacity onPress={() => setShowCreateModal(true)} style={[styles.createButton, { backgroundColor: colors.primary }]}>
+            <TouchableOpacity onPress={() => router.push('/listing/create')} style={[styles.createButton, { backgroundColor: colors.primary }]}>
               <Text style={styles.createButtonText}>+ Créer</Text>
             </TouchableOpacity>
           </View>
@@ -214,7 +210,7 @@ export default function HomeScreen() {
           {error && <Text style={[styles.emptyText, { color: colors.error }]}>{error}</Text>}
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Aucune annonce trouvée</Text>
             <TouchableOpacity
-              onPress={() => setShowCreateModal(true)}
+              onPress={() => router.push('/listing/create')}
               style={[styles.emptyButton, { backgroundColor: colors.primary }]}
             >
               <Text style={styles.emptyButtonText}>Créer une annonce</Text>
@@ -226,7 +222,7 @@ export default function HomeScreen() {
               <View key={listing.id} style={styles.listingCardWrapper}>
                 <ListingCard
                   listing={listing}
-                  onPress={() => setSelectedListing(listing)}
+                  onPress={() => router.push(`/listing/${listing.id}`)}
                 />
               </View>
             ))}
@@ -236,22 +232,6 @@ export default function HomeScreen() {
 
       <BottomNav />
 
-      <CreateListingModal
-        visible={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={loadListings}
-      />
-
-      <ListingDetailModal
-        listing={selectedListing}
-        visible={!!selectedListing}
-        onClose={() => setSelectedListing(null)}
-        onSuccess={loadListings}
-        onUserClick={(userId) => {
-          setSelectedListing(null);
-          router.push(`/user/${userId}`);
-        }}
-      />
     </SafeAreaView>
   );
 }
@@ -269,7 +249,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    paddingHorizontal: 14,
+    paddingTop: 16,
     paddingBottom: 16,
   },
   header: {
@@ -357,10 +338,11 @@ const styles = StyleSheet.create({
   listingsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
     paddingBottom: 16,
   },
   listingCardWrapper: {
-    width: '48%',
+    width: '50%',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
 });

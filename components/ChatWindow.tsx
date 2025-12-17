@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Keyboard } from 'react-native';
 import { Send, AlertTriangle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
@@ -34,8 +34,10 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
   }, [proposalId, user?.id]);
 
   useEffect(() => {
-    if (chatId) {
+    if (chatId && user) {
       loadMessages();
+      markMessageNotificationsAsRead();
+      
       const subscription = supabase
         .channel(`chat:${chatId}`)
         .on('postgres_changes', {
@@ -52,7 +54,36 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
         subscription.unsubscribe();
       };
     }
-  }, [chatId]);
+  }, [chatId, user?.id, proposalId]);
+
+  async function markMessageNotificationsAsRead() {
+    if (!user || !proposalId) return;
+    
+    try {
+      const { data: updated, error } = await supabase
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .eq('type', 'message_received')
+        .eq('related_id', proposalId)
+        .is('read_at', null)
+        .select();
+      
+      if (error) {
+        // Si la table n'existe pas, on ignore silencieusement
+        if (error.code !== 'PGRST205') {
+          console.error('Error marking message notifications as read:', error);
+        }
+      } else if (updated && updated.length > 0) {
+        console.log(`Marked ${updated.length} message notifications as read for proposal ${proposalId}`);
+      }
+    } catch (err: any) {
+      // Ignorer les erreurs si la table n'existe pas
+      if (err?.code !== 'PGRST205') {
+        console.error('Error in markMessageNotificationsAsRead:', err);
+      }
+    }
+  }
 
   useEffect(() => {
     scrollToBottom();
@@ -109,8 +140,16 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
     const messageToSend = newMessage.trim();
     setLoading(true);
     setNewMessage('');
+    Keyboard.dismiss(); // Fermer le clavier immédiatement après avoir nettoyé le message
 
     try {
+      // Récupérer les infos de la proposition pour connaître l'autre utilisateur
+      const { data: chatData } = await supabase
+        .from('chats')
+        .select('proposal:proposals(id, from_user_id, to_user_id, from_user:users!proposals_from_user_id_fkey(display_name), to_user:users!proposals_to_user_id_fkey(display_name))')
+        .eq('id', chatId)
+        .single();
+
       const { error } = await supabase.from('chat_messages').insert({
         chat_id: chatId,
         sender_id: user.id,
@@ -118,6 +157,38 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
       });
 
       if (error) throw error;
+      
+      // Créer une notification pour l'autre utilisateur
+      if (chatData?.proposal) {
+        const proposal = chatData.proposal as any;
+        const otherUserId = proposal.from_user_id === user.id ? proposal.to_user_id : proposal.from_user_id;
+        const senderName = user.display_name || user.email || 'Un utilisateur';
+        
+        try {
+          const { data: notifData, error: notifError } = await supabase
+            .from('notifications')
+            .insert({
+              user_id: otherUserId,
+              type: 'message_received',
+              message: `${senderName} vous a envoyé un message`,
+              related_id: proposal.id || proposalId,
+            })
+            .select();
+          
+          if (notifError) {
+            if (notifError.code === 'PGRST205') {
+              console.warn('Table notifications does not exist. Please run the SQL script.');
+            } else {
+              console.error('Error creating message notification:', notifError);
+            }
+          } else if (notifData) {
+            console.log('Message notification created:', notifData[0]?.id);
+          }
+        } catch (notifError: any) {
+          console.error('Exception creating message notification:', notifError);
+        }
+      }
+
       await loadMessages();
     } catch (error) {
       console.error('Error sending message:', error);
@@ -199,10 +270,21 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
           placeholderTextColor="#999"
           multiline
           maxLength={500}
+          returnKeyType="send"
+          blurOnSubmit={false}
+          onSubmitEditing={() => {
+            if (newMessage.trim() && !loading) {
+              handleSend();
+              Keyboard.dismiss();
+            }
+          }}
         />
         <TouchableOpacity
           style={[styles.sendButton, (!newMessage.trim() || loading) && styles.sendButtonDisabled]}
-          onPress={handleSend}
+          onPress={() => {
+            handleSend();
+            Keyboard.dismiss();
+          }}
           disabled={!newMessage.trim() || loading}
         >
           {loading ? (

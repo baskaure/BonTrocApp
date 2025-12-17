@@ -126,17 +126,6 @@ export type Review = {
   created_at: string;
 };
 
-export type Contract = {
-  id: string;
-  proposal_id: string;
-  html_content: string;
-  status: 'draft' | 'active' | 'completed' | 'cancelled';
-  accepted_by_from_at?: string;
-  accepted_by_to_at?: string;
-  created_at: string;
-  updated_at: string;
-};
-
 export type Dispute = {
   id: string;
   exchange_id: string;
@@ -160,6 +149,22 @@ export type ChatMessage = {
     display_name: string;
     avatar_url?: string;
   };
+};
+
+export type Contract = {
+  id: string;
+  proposal_id: string;
+  version: number;
+  html_content: string;
+  pdf_url?: string;
+  accepted_by_from_at?: string;
+  accepted_by_to_at?: string;
+  status: 'awaiting_signatures' | 'active' | 'completed' | 'cancelled';
+  signature_provider?: 'signrequest' | null;
+  signature_status?: 'idle' | 'pending' | 'sent' | 'completed' | 'failed';
+  signature_reference?: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type EsignRequest = {

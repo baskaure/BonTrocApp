@@ -67,19 +67,28 @@ function RootLayoutNav() {
   }, [user, segments, pathname, isReady, loading, router]);
 
   return (
-    <Stack screenOptions={{ headerShown: false, animation: 'none' }} initialRouteName="(splash)">
-      <Stack.Screen name="(splash)" options={{ headerShown: false }} />
-      <Stack.Screen name="landing" />
-      <Stack.Screen name="index" />
-      <Stack.Screen name="auth" />
-      <Stack.Screen name="auth/callback" />
-      <Stack.Screen name="proposals" />
-      <Stack.Screen name="proposal/[id]" />
-      <Stack.Screen name="profile" />
-      <Stack.Screen name="settings" />
-      <Stack.Screen name="exchanges" />
-      <Stack.Screen name="admin" />
-      <Stack.Screen name="user/[id]" />
+    <Stack 
+      screenOptions={{ 
+        headerShown: false, 
+        animation: 'fade',
+        animationDuration: 150, // Transition rapide (150ms)
+      }} 
+      initialRouteName="(splash)"
+    >
+      <Stack.Screen name="(splash)" options={{ headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="landing" options={{ animation: 'fade' }} />
+      <Stack.Screen name="index" options={{ animation: 'fade' }} />
+      <Stack.Screen name="auth" options={{ animation: 'fade' }} />
+      <Stack.Screen name="auth/callback" options={{ animation: 'none' }} />
+      <Stack.Screen name="proposals" options={{ animation: 'fade' }} />
+      <Stack.Screen name="proposal/[id]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
+      <Stack.Screen name="listing/[id]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
+      <Stack.Screen name="listing/create" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
+      <Stack.Screen name="profile" options={{ animation: 'fade' }} />
+      <Stack.Screen name="settings" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
+      <Stack.Screen name="exchanges" options={{ animation: 'fade' }} />
+      <Stack.Screen name="admin" options={{ animation: 'fade' }} />
+      <Stack.Screen name="user/[id]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

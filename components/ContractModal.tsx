@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { X, FileText, CheckCircle, Download } from 'lucide-react-native';
 import { supabase, Contract } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme';
+import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
@@ -22,6 +24,7 @@ type ContractModalProps = {
 
 export function ContractModal({ contract, visible, onClose, onAccepted }: ContractModalProps) {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showFullContract, setShowFullContract] = useState(false);
@@ -54,8 +57,8 @@ export function ContractModal({ contract, visible, onClose, onAccepted }: Contra
         throw new Error('Contrat introuvable');
       }
 
-      const alreadyAccepted = isFromUser
-        ? !!currentContract.accepted_by_from_at
+      const alreadyAccepted = isFromUser 
+        ? !!currentContract.accepted_by_from_at 
         : !!currentContract.accepted_by_to_at;
 
       if (alreadyAccepted) {
@@ -91,8 +94,8 @@ export function ContractModal({ contract, visible, onClose, onAccepted }: Contra
 
       onAccepted();
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'acceptation');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de l\'acceptation');
     } finally {
       setLoading(false);
     }
@@ -100,19 +103,40 @@ export function ContractModal({ contract, visible, onClose, onAccepted }: Contra
 
   async function downloadContract() {
     try {
-      const fileUri = FileSystem.documentDirectory + `contrat-${contract.id}.html`;
-      await FileSystem.writeAsStringAsync(fileUri, contract.html_content);
-      
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri);
+      // Créer un fichier HTML temporaire
+      const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contrat ${contract.id}</title>
+</head>
+<body>
+  ${contract.html_content}
+</body>
+</html>
+      `;
+
+      const fileUri = `${FileSystem.documentDirectory}contrat-${contract.id}.html`;
+      await FileSystem.writeAsStringAsync(fileUri, htmlContent, { encoding: FileSystem.EncodingType.UTF8 });
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/html',
+          dialogTitle: 'Partager le contrat',
+        });
       } else {
-        Alert.alert('Info', 'Le partage de fichiers n\'est pas disponible sur cet appareil');
+        Alert.alert('Erreur', 'Le partage de fichiers n\'est pas disponible sur cet appareil.');
       }
     } catch (err) {
       console.error('Error downloading contract:', err);
-      Alert.alert('Erreur', 'Impossible de télécharger le contrat');
+      Alert.alert('Erreur', 'Impossible de télécharger le contrat.');
     }
   }
+
+  if (!visible) return null;
 
   return (
     <Modal
@@ -120,54 +144,58 @@ export function ContractModal({ contract, visible, onClose, onAccepted }: Contra
       animationType="slide"
       transparent={true}
       onRequestClose={onClose}
+      statusBarTranslucent
     >
       <View style={styles.overlay}>
-        <View style={styles.modal}>
-          <View style={styles.header}>
-            <View style={styles.headerTitle}>
-              <FileText size={24} color="#19ADFA" />
-              <Text style={styles.title}>Contrat d'échange</Text>
+        <View style={[styles.modal, { backgroundColor: colors.surface }]}>
+          <View style={[styles.header, { borderBottomColor: colors.border }]}>
+            <View style={styles.headerLeft}>
+              <FileText size={24} color={colors.primary} />
+              <Text style={[styles.headerTitle, { color: colors.text }]}>
+                Contrat d'échange
+              </Text>
             </View>
             <TouchableOpacity onPress={onClose}>
-              <X size={24} color="#64748B" />
+              <X size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-            {error && (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{error}</Text>
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={true}>
+            {error ? (
+              <View style={[styles.errorBox, { backgroundColor: colors.errorLight, borderColor: colors.error }]}>
+                <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
               </View>
-            )}
+            ) : null}
 
-            <View style={styles.statusBox}>
-              <Text style={styles.statusTitle}>Statut des signatures électroniques</Text>
-              <View style={styles.statusItem}>
+            <View style={[styles.signatureStatus, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
+              <Text style={[styles.signatureStatusTitle, { color: colors.primary }]}>
+                Statut des signatures électroniques
+              </Text>
+              <View style={styles.signatureRow}>
                 {hasUserAccepted ? (
-                  <CheckCircle size={20} color="#10B981" />
+                  <CheckCircle size={20} color={colors.success} />
                 ) : (
-                  <View style={styles.statusPending} />
+                  <View style={[styles.circle, { borderColor: colors.border }]} />
                 )}
-                <Text style={[styles.statusText, hasUserAccepted && styles.statusTextAccepted]}>
+                <Text style={[styles.signatureText, { color: colors.text }]}>
                   Vous: {hasUserAccepted ? 'Accepté' : 'En attente'}
                 </Text>
               </View>
-              <View style={styles.statusItem}>
+              <View style={styles.signatureRow}>
                 {hasOtherAccepted ? (
-                  <CheckCircle size={20} color="#10B981" />
+                  <CheckCircle size={20} color={colors.success} />
                 ) : (
-                  <View style={styles.statusPending} />
+                  <View style={[styles.circle, { borderColor: colors.border }]} />
                 )}
-                <Text style={[styles.statusText, hasOtherAccepted && styles.statusTextAccepted]}>
+                <Text style={[styles.signatureText, { color: colors.text }]}>
                   {otherPartyName}: {hasOtherAccepted ? 'Accepté' : 'En attente'}
                 </Text>
               </View>
 
               {hasUserAccepted && hasOtherAccepted && (
-                <View style={styles.successBox}>
-                  <CheckCircle size={20} color="#10B981" />
-                  <Text style={styles.successText}>
-                    Contrat entièrement signé électroniquement et désormais actif.
+                <View style={[styles.successBox, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
+                  <Text style={[styles.successText, { color: colors.success }]}>
+                    ✓ Contrat entièrement signé électroniquement sur BonTroc et désormais actif.
                   </Text>
                 </View>
               )}
@@ -175,93 +203,91 @@ export function ContractModal({ contract, visible, onClose, onAccepted }: Contra
 
             <View style={styles.contractSection}>
               <View style={styles.contractHeader}>
-                <Text style={styles.contractTitle}>Contenu du contrat</Text>
-                <TouchableOpacity
-                  style={styles.downloadButton}
-                  onPress={downloadContract}
-                >
-                  <Download size={16} color="#19ADFA" />
-                  <Text style={styles.downloadText}>Télécharger</Text>
+                <Text style={[styles.contractTitle, { color: colors.text }]}>Contenu du contrat</Text>
+                <TouchableOpacity onPress={downloadContract} style={styles.downloadButton}>
+                  <Download size={18} color={colors.primary} />
+                  <Text style={[styles.downloadText, { color: colors.primary }]}>Télécharger</Text>
                 </TouchableOpacity>
               </View>
 
-              <ScrollView
-                style={[styles.contractContent, !showFullContract && styles.contractContentCollapsed]}
-                nestedScrollEnabled={true}
-              >
-                <Text style={styles.contractHtml}>
-                  {contract.html_content.replace(/<[^>]*>/g, ' ').substring(0, showFullContract ? undefined : 500)}
-                  {!showFullContract && '...'}
-                </Text>
-              </ScrollView>
+              <View style={[styles.contractContent, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <WebView
+                  source={{ html: contract.html_content }}
+                  style={styles.webview}
+                  scrollEnabled={true}
+                  showsVerticalScrollIndicator={true}
+                />
+              </View>
 
               <TouchableOpacity
-                style={styles.toggleButton}
                 onPress={() => setShowFullContract(!showFullContract)}
+                style={styles.toggleButton}
               >
-                <Text style={styles.toggleButtonText}>
+                <Text style={[styles.toggleText, { color: colors.primary }]}>
                   {showFullContract ? 'Réduire' : 'Voir le contrat complet'}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {!hasUserAccepted ? (
-              <View style={styles.acceptSection}>
-                <View style={styles.warningBox}>
-                  <Text style={styles.warningText}>
-                    La signature est réalisée directement sur BonTroc : en cochant la case ci-dessous
-                    puis en cliquant sur « Signer le contrat », vous apposez votre signature
-                    électronique simple sur ce contrat. Le contrat deviendra actif une fois que les deux
-                    parties l'auront signé.
+            <View style={[styles.actionSection, { borderTopColor: colors.border }]}>
+              {!hasUserAccepted ? (
+                <>
+                  <View style={[styles.warningBox, { backgroundColor: colors.warningLight, borderColor: colors.warning }]}>
+                    <Text style={[styles.warningText, { color: colors.warning }]}>
+                      La signature est réalisée directement sur BonTroc : en cochant la case ci-dessous puis en cliquant sur « Signer le contrat », vous apposez votre signature électronique simple sur ce contrat. Le contrat deviendra actif une fois que les deux parties l'auront signé.
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.checkboxContainer}
+                    onPress={() => setHasReadAndAccepted(!hasReadAndAccepted)}
+                  >
+                    <View style={[styles.checkbox, hasReadAndAccepted && { backgroundColor: colors.success, borderColor: colors.success }]}>
+                      {hasReadAndAccepted && <CheckCircle size={16} color="#FFF" />}
+                    </View>
+                    <Text style={[styles.checkboxLabel, { color: colors.text }]}>
+                      J'ai lu l'intégralité de ce contrat, j'en comprends les termes et conditions, et je reconnais que mon clic sur le bouton ci-dessous vaut signature électronique et accord ferme sur ce contrat.
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.signButton, { backgroundColor: colors.success }, (!hasReadAndAccepted || loading) && styles.signButtonDisabled]}
+                    onPress={handleAccept}
+                    disabled={loading || !hasReadAndAccepted}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <>
+                        <CheckCircle size={20} color="#FFF" />
+                        <Text style={styles.signButtonText}>Signer électroniquement ce contrat</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={[styles.successBox, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
+                  <CheckCircle size={20} color={colors.success} />
+                  <Text style={[styles.successText, { color: colors.success }]}>
+                    Vous avez déjà accepté ce contrat
+                    {hasOtherAccepted
+                      ? '. L\'échange peut maintenant commencer.'
+                      : '. En attente de l\'acceptation de l\'autre partie.'}
                   </Text>
                 </View>
+              )}
 
-                <TouchableOpacity
-                  style={styles.checkboxContainer}
-                  onPress={() => setHasReadAndAccepted(!hasReadAndAccepted)}
-                >
-                  <View style={[styles.checkbox, hasReadAndAccepted && styles.checkboxChecked]}>
-                    {hasReadAndAccepted && <CheckCircle size={16} color="#10B981" />}
-                  </View>
-                  <Text style={styles.checkboxLabel}>
-                    J'ai lu l'intégralité de ce contrat, j'en comprends les termes et conditions, et je
-                    reconnais que mon clic sur le bouton ci-dessous vaut signature électronique et accord
-                    ferme sur ce contrat.
-                  </Text>
-                </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.closeButton, { backgroundColor: colors.background, borderColor: colors.border }]}
+                onPress={onClose}
+              >
+                <Text style={[styles.closeButtonText, { color: colors.text }]}>Fermer</Text>
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[styles.signButton, (!hasReadAndAccepted || loading) && styles.signButtonDisabled]}
-                  onPress={handleAccept}
-                  disabled={loading || !hasReadAndAccepted}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <>
-                      <CheckCircle size={20} color="#FFF" />
-                      <Text style={styles.signButtonText}>Signer électroniquement ce contrat</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.acceptedBox}>
-                <CheckCircle size={20} color="#10B981" />
-                <Text style={styles.acceptedText}>
-                  Vous avez déjà accepté ce contrat
-                  {hasOtherAccepted
-                    ? '. L\'échange peut maintenant commencer.'
-                    : '. En attente de l\'acceptation de l\'autre partie.'}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>
+              <Text style={[styles.contractInfo, { color: colors.textTertiary }]}>
                 Contrat généré le {new Date(contract.created_at).toLocaleDateString('fr-FR')}
+                {'\n'}ID: {contract.id}
               </Text>
-              <Text style={styles.footerText}>ID: {contract.id}</Text>
             </View>
           </ScrollView>
         </View>
@@ -273,111 +299,97 @@ export function ContractModal({ contract, visible, onClose, onAccepted }: Contra
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
   },
   modal: {
-    backgroundColor: '#FFF',
+    maxHeight: '90%',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '90%',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    justifyContent: 'space-between',
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
   },
-  headerTitle: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  title: {
+  headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1E293B',
+    fontWeight: '600',
   },
-  scrollView: {
-    padding: 20,
+  content: {
+    flex: 1,
   },
   errorBox: {
-    backgroundColor: '#FEE2E2',
+    margin: 16,
     padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   errorText: {
-    color: '#DC2626',
     fontSize: 14,
   },
-  statusBox: {
-    backgroundColor: '#E0F2FE',
+  signatureStatus: {
+    margin: 16,
     padding: 16,
     borderRadius: 12,
-    marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
   },
-  statusTitle: {
+  signatureStatusTitle: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#19ADFA',
+    fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
     marginBottom: 12,
+    letterSpacing: 0.5,
   },
-  statusItem: {
+  signatureRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 8,
   },
-  statusPending: {
+  circle: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#CBD5E1',
   },
-  statusText: {
+  signatureText: {
     fontSize: 14,
-    color: '#475569',
-  },
-  statusTextAccepted: {
-    color: '#059669',
-    fontWeight: '600',
   },
   successBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#D1FAE5',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 12,
   },
   successText: {
-    flex: 1,
     fontSize: 14,
-    color: '#065F46',
-    fontWeight: '600',
+    fontWeight: '500',
+    flex: 1,
   },
   contractSection: {
-    marginBottom: 20,
+    margin: 16,
+    marginTop: 0,
   },
   contractHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
   contractTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E293B',
   },
   downloadButton: {
     flexDirection: 'row',
@@ -386,83 +398,66 @@ const styles = StyleSheet.create({
   },
   downloadText: {
     fontSize: 14,
-    color: '#19ADFA',
-    fontWeight: '600',
+    fontWeight: '500',
   },
   contractContent: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 12,
-    padding: 16,
-    maxHeight: 200,
+    borderWidth: 1,
+    overflow: 'hidden',
+    height: 400,
   },
-  contractContentCollapsed: {
-    maxHeight: 100,
-  },
-  contractHtml: {
-    fontSize: 13,
-    color: '#475569',
-    lineHeight: 20,
+  webview: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   toggleButton: {
     marginTop: 8,
   },
-  toggleButtonText: {
+  toggleText: {
     fontSize: 14,
-    color: '#19ADFA',
-    fontWeight: '600',
+    fontWeight: '500',
   },
-  acceptSection: {
-    marginBottom: 20,
+  actionSection: {
+    margin: 16,
+    marginTop: 0,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    gap: 12,
   },
   warningBox: {
-    backgroundColor: '#FEF3C7',
     padding: 12,
     borderRadius: 12,
-    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#FDE68A',
   },
   warningText: {
-    fontSize: 13,
-    color: '#92400E',
-    lineHeight: 18,
+    fontSize: 12,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    marginBottom: 16,
   },
   checkbox: {
     width: 24,
     height: 24,
-    borderRadius: 6,
+    borderRadius: 4,
     borderWidth: 2,
-    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
-  checkboxChecked: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
-  },
   checkboxLabel: {
+    fontSize: 12,
     flex: 1,
-    fontSize: 13,
-    color: '#475569',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   signButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#10B981',
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 12,
   },
   signButtonDisabled: {
     opacity: 0.5,
@@ -472,31 +467,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  acceptedBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#D1FAE5',
+  closeButton: {
     padding: 16,
     borderRadius: 12,
-    marginBottom: 20,
-  },
-  acceptedText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#065F46',
-    fontWeight: '600',
-  },
-  footer: {
+    borderWidth: 1,
     alignItems: 'center',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
   },
-  footerText: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginBottom: 4,
+  closeButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  contractInfo: {
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 8,
   },
 });
-

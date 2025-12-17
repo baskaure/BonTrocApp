@@ -71,6 +71,33 @@ export default function ExchangesScreen() {
       }));
 
       setExchanges(normalized as ExchangeWithDetails[]);
+      
+      // Marquer les notifications d'échanges comme lues
+      if (user) {
+        try {
+          const { data: updated, error: updateError } = await supabase
+            .from('notifications')
+            .update({ read_at: new Date().toISOString() })
+            .eq('user_id', user.id)
+            .eq('type', 'exchange_update')
+            .is('read_at', null)
+            .select();
+          
+          if (updateError) {
+            // Si la table n'existe pas, on ignore silencieusement
+            if (updateError.code !== 'PGRST205') {
+              console.error('Error marking exchange notifications as read:', updateError);
+            }
+          } else if (updated && updated.length > 0) {
+            console.log(`Marked ${updated.length} exchange notifications as read`);
+          }
+        } catch (err: any) {
+          // Ignorer les erreurs si la table n'existe pas
+          if (err?.code !== 'PGRST205') {
+            console.error('Error in mark exchange notifications as read:', err);
+          }
+        }
+      }
     } catch (error) {
       console.error('Error loading exchanges:', error);
     } finally {

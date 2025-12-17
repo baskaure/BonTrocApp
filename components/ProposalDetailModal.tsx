@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { X, MessageCircle, CheckCircle, XCircle, Send } from 'lucide-react-native';
 import { supabase, Proposal } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { ChatWindow } from './ChatWindow';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { BottomNav } from './BottomNav';
 
 type ProposalDetailModalProps = {
   proposal: Proposal | null;
@@ -126,18 +128,22 @@ export function ProposalDetailModal({ proposal, visible, onClose, onUpdate, full
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={fullScreen ? { paddingBottom: 32 } : undefined}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView 
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={fullScreen ? { paddingBottom: 100 } : { paddingBottom: 32 }}
+          showsVerticalScrollIndicator={false}
+        >
             <View style={styles.userSection}>
               {otherUser?.avatar_url ? (
-                <View style={styles.avatarContainer}>
-                  <Text style={styles.avatarText}>
-                    {otherUser.display_name?.[0]?.toUpperCase() || '?'}
-                  </Text>
-                </View>
+                <Image
+                  source={{ uri: otherUser.avatar_url }}
+                  style={styles.avatar}
+                />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Text style={styles.avatarText}>
@@ -261,28 +267,47 @@ export function ProposalDetailModal({ proposal, visible, onClose, onUpdate, full
               </View>
             )}
 
-            <TouchableOpacity
-              style={[styles.chatToggle, { backgroundColor: colors.background, borderColor: colors.border }]}
-              onPress={() => setShowChat(!showChat)}
-            >
-              <MessageCircle size={20} color={colors.primary} />
-              <Text style={[styles.chatToggleText, { color: colors.primary }]}>
-                {showChat ? 'Masquer' : 'Ouvrir'} la discussion
-              </Text>
-            </TouchableOpacity>
+            {proposal.status === 'accepted' && (
+              <TouchableOpacity
+                style={[styles.chatButton, { backgroundColor: colors.primary }]}
+                onPress={() => setShowChat(!showChat)}
+              >
+                <MessageCircle size={20} color="#FFF" />
+                <Text style={styles.chatButtonText}>
+                  {showChat ? 'Masquer' : 'Ouvrir'} la discussion
+                </Text>
+              </TouchableOpacity>
+            )}
 
-            {showChat && <ChatWindow proposalId={proposal.id} />}
-      </ScrollView>
+            {proposal.status === 'pending' && (
+              <TouchableOpacity
+                style={[styles.chatButtonSecondary, { backgroundColor: colors.background, borderColor: colors.border }]}
+                onPress={() => setShowChat(!showChat)}
+              >
+                <MessageCircle size={20} color={colors.primary} />
+                <Text style={[styles.chatButtonTextSecondary, { color: colors.primary }]}>
+                  {showChat ? 'Masquer' : 'Discuter'} avec {otherUser?.display_name}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {showChat && (
+              <View style={styles.chatContainer}>
+                <ChatWindow proposalId={proposal.id} />
+              </View>
+            )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </>
   );
 
   if (fullScreen) {
     return (
-      <View style={[styles.fullscreenContainer, { backgroundColor: colors.background }]}>
-        <View style={[styles.modal, { backgroundColor: colors.surface, maxHeight: '100%', minHeight: '100%' }]}>
+      <SafeAreaView style={[styles.fullscreenContainer, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+        <View style={[styles.modal, { backgroundColor: colors.surface, maxHeight: '100%', minHeight: '100%', flex: 1 }]}>
           {content}
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -331,8 +356,12 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  keyboardView: {
+    flex: 1,
+  },
   scrollView: {
     padding: 20,
+    flex: 1,
   },
   userSection: {
     flexDirection: 'row',
@@ -340,11 +369,10 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 20,
   },
-  avatarContainer: {
+  avatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    overflow: 'hidden',
   },
   avatarPlaceholder: {
     width: 50,
@@ -477,19 +505,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  chatToggle: {
+  chatButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    padding: 12,
-    borderWidth: 1,
+    padding: 16,
     borderRadius: 20,
     marginBottom: 20,
   },
-  chatToggleText: {
-    fontSize: 14,
+  chatButtonText: {
+    color: '#FFF',
+    fontSize: 16,
     fontWeight: '600',
+  },
+  chatButtonSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 16,
+    borderWidth: 2,
+    borderRadius: 20,
+    marginBottom: 20,
+  },
+  chatButtonTextSecondary: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  chatContainer: {
+    marginBottom: 20,
   },
 });
 

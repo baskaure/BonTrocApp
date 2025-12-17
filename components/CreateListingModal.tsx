@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
-import { X } from 'lucide-react-native';
+import { X, Upload, Image as ImageIcon } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 type CreateListingModalProps = {
   visible: boolean;
@@ -16,6 +17,28 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
   const { colors } = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [images, setImages] = useState<string[]>([]);
+
+  const resetForm = () => {
+    setFormData({
+      type: 'service',
+      title: '',
+      description_offer: '',
+      desired_exchange_desc: '',
+      mode: 'both',
+      estimation_min: '',
+      estimation_max: '',
+    });
+    setImages([]);
+    setError('');
+    setUploading(false);
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
 
   const [formData, setFormData] = useState({
     type: 'service' as 'service' | 'product',
@@ -27,6 +50,68 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
     estimation_max: '',
   });
 
+  const pickImage = async () => {
+    if (images.length >= 5) {
+      Alert.alert('Limite atteinte', 'Vous ne pouvez ajouter que 5 photos maximum');
+      return;
+    }
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour accéder aux photos');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+      selectionLimit: 5 - images.length,
+    });
+
+    if (!result.canceled && result.assets.length > 0) {
+      setUploading(true);
+      setError('');
+
+      try {
+        const uploadPromises = result.assets.map(async (asset) => {
+          const ext = asset.uri.split('.').pop() || 'jpg';
+          const fileName = `${user?.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+
+          const { error: uploadError } = await supabase.storage
+            .from('listing-media')
+            .upload(`images/${fileName}`, blob, {
+              contentType: `image/${ext}`,
+              cacheControl: '3600',
+            });
+
+          if (uploadError) throw uploadError;
+
+          const { data } = supabase.storage.from('listing-media').getPublicUrl(`images/${fileName}`);
+          if (!data?.publicUrl) throw new Error("Impossible de récupérer l'URL publique");
+
+          return data.publicUrl;
+        });
+
+        const uploadedUrls = await Promise.all(uploadPromises);
+        setImages([...images, ...uploadedUrls]);
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || "Échec du téléversement des images");
+        Alert.alert('Erreur', err.message || "Échec du téléversement des images");
+      } finally {
+        setUploading(false);
+      }
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setImages(images.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async () => {
     if (!user) return;
 
@@ -34,21 +119,43 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
     setLoading(true);
 
     try {
-      const { error: insertError } = await supabase.from('listings').insert({
-        user_id: user.id,
-        type: formData.type,
-        title: formData.title,
-        description_offer: formData.description_offer,
-        desired_exchange_desc: formData.desired_exchange_desc,
-        mode: formData.mode,
-        estimation_min: formData.estimation_min ? parseFloat(formData.estimation_min) : null,
-        estimation_max: formData.estimation_max ? parseFloat(formData.estimation_max) : null,
-        status: 'published',
-        location_lat: user.geo_lat,
-        location_lng: user.geo_lng,
-      });
+      const { data: listingData, error: insertError } = await supabase
+        .from('listings')
+        .insert({
+          user_id: user.id,
+          type: formData.type,
+          title: formData.title,
+          description_offer: formData.description_offer,
+          desired_exchange_desc: formData.desired_exchange_desc,
+          mode: formData.mode,
+          estimation_min: formData.estimation_min ? parseFloat(formData.estimation_min) : null,
+          estimation_max: formData.estimation_max ? parseFloat(formData.estimation_max) : null,
+          status: 'published',
+          location_lat: user.geo_lat,
+          location_lng: user.geo_lng,
+        })
+        .select('id')
+        .single();
 
       if (insertError) throw insertError;
+
+      // Upload des images
+      if (listingData?.id && images.length > 0) {
+        const mediaPromises = images.map((url, index) =>
+          supabase.from('listing_media').insert({
+            listing_id: listingData.id,
+            url: url,
+            type: 'image',
+            sort_order: index,
+          })
+        );
+
+        const results = await Promise.all(mediaPromises);
+        const hasError = results.some(({ error }) => error);
+        if (hasError) {
+          console.error('Erreur lors de l\'upload des médias');
+        }
+      }
 
       setFormData({
         type: 'service',
@@ -59,9 +166,10 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
         estimation_min: '',
         estimation_max: '',
       });
+      resetForm();
 
       onSuccess();
-      onClose();
+      handleClose();
       Alert.alert('Succès', 'Annonce créée avec succès !');
     } catch (err: any) {
       setError(err.message || 'Une erreur est survenue');
@@ -82,12 +190,50 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
         <View style={[styles.modal, { backgroundColor: colors.surface }]}>
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <Text style={[styles.title, { color: colors.text }]}>Créer une annonce</Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={handleClose}>
               <X size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Photos (max 5)</Text>
+              <View style={styles.imagesContainer}>
+                {images.map((uri, index) => (
+                  <View key={index} style={styles.imageWrapper}>
+                    <Image source={{ uri }} style={styles.previewImage} />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => removeImage(index)}
+                    >
+                      <X size={16} color="#FFF" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {images.length < 5 && (
+                  <TouchableOpacity
+                    style={[styles.addImageButton, { backgroundColor: colors.background, borderColor: colors.border }]}
+                    onPress={pickImage}
+                    disabled={uploading}
+                  >
+                    {uploading ? (
+                      <ActivityIndicator color={colors.primary} />
+                    ) : (
+                      <>
+                        <Upload size={24} color={colors.primary} />
+                        <Text style={[styles.addImageText, { color: colors.primary }]}>Ajouter</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+              {images.length === 0 && (
+                <Text style={[styles.helperText, { color: colors.textTertiary }]}>
+                  Ajoutez jusqu'à 5 photos pour illustrer votre annonce
+                </Text>
+              )}
+            </View>
+
             <View style={styles.section}>
               <Text style={[styles.label, { color: colors.textSecondary }]}>Type d'annonce</Text>
               <View style={styles.radioGroup}>
@@ -207,7 +353,7 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
           <View style={[styles.footer, { borderTopColor: colors.border }]}>
             <TouchableOpacity
               style={[styles.cancelButton, { borderColor: colors.border }]}
-              onPress={onClose}
+              onPress={handleClose}
             >
               <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Annuler</Text>
             </TouchableOpacity>
@@ -347,6 +493,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
+  },
+  imagesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 8,
+  },
+  imageWrapper: {
+    position: 'relative',
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addImageButton: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  addImageText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  helperText: {
+    fontSize: 12,
+    marginTop: 4,
   },
 });
 

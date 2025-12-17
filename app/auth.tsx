@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -54,7 +54,19 @@ export default function AuthScreen() {
     if (params.mode === 'register' || params.mode === 'login') {
       setMode(params.mode);
     }
-  }, [params.mode]);
+    
+    // Afficher les erreurs OAuth si présentes dans les paramètres d'URL
+    if (params.error) {
+      const errorMessage = decodeURIComponent(params.error as string);
+      Alert.alert(
+        'Erreur de connexion Google',
+        errorMessage,
+        [{ text: 'OK' }]
+      );
+      // Nettoyer l'erreur de l'URL
+      router.replace('/auth');
+    }
+  }, [params.mode, params.error, router]);
 
   // Rediriger vers la page principale si l'utilisateur est connecté
   useEffect(() => {
@@ -77,7 +89,57 @@ export default function AuthScreen() {
       return;
     }
     
-    // Vérifier si c'est un callback OAuth
+    // Vérifier d'abord s'il y a des erreurs dans l'URL
+    const urlLower = url.toLowerCase();
+    if (urlLower.includes('error=') || urlLower.includes('error&')) {
+      isProcessingOAuth.current = true;
+      try {
+        // Extraire les paramètres d'erreur
+        let fragment = '';
+        if (url.includes('#')) {
+          fragment = url.split('#')[1];
+        } else if (url.includes('?')) {
+          const queryString = url.split('?')[1];
+          fragment = queryString;
+        }
+        
+        const params = new URLSearchParams(fragment);
+        const error = params.get('error');
+        const errorDescription = params.get('error_description');
+        
+        console.error('OAuth error in URL:', error, errorDescription);
+        
+        let errorMessage = 'Erreur lors de la connexion Google';
+        
+        if (error === 'access_denied') {
+          errorMessage = 'Accès refusé. Vérifiez que votre email est dans la liste des testeurs si l\'application est en mode Testing.';
+        } else if (error === 'invalid_request') {
+          errorMessage = 'Requête invalide. L\'application Google OAuth n\'est peut-être pas correctement configurée.';
+        } else if (errorDescription) {
+          errorMessage = errorDescription;
+        } else if (error) {
+          errorMessage = `Erreur OAuth: ${error}`;
+        }
+        
+        Alert.alert(
+          'Erreur de connexion Google',
+          errorMessage + '\n\nVérifiez la configuration dans Google Cloud Console.',
+          [{ text: 'OK' }]
+        );
+        setGoogleLoading(false);
+      } catch (err) {
+        console.error('Error parsing OAuth error:', err);
+        Alert.alert('Erreur', 'Erreur lors de la connexion Google');
+        setGoogleLoading(false);
+      } finally {
+        setTimeout(() => {
+          isProcessingOAuth.current = false;
+        }, 1000);
+      }
+      return;
+    }
+    
+    // Vérifier si c'est un callback OAuth avec des tokens
     if (url.includes('#access_token=') || url.includes('?access_token=') || url.includes('&access_token=')) {
       isProcessingOAuth.current = true;
       
@@ -94,6 +156,26 @@ export default function AuthScreen() {
         const params = new URLSearchParams(fragment);
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
+        const error = params.get('error');
+        
+        // Vérifier s'il y a une erreur dans les paramètres
+        if (error) {
+          const errorDescription = params.get('error_description') || '';
+          console.error('OAuth error in params:', error, errorDescription);
+          
+          let errorMessage = 'Erreur lors de la connexion Google';
+          if (error === 'access_denied') {
+            errorMessage = 'Accès refusé. Vérifiez que votre email est dans la liste des testeurs si l\'application est en mode Testing.';
+          } else if (error === 'invalid_request') {
+            errorMessage = 'Requête invalide. L\'application Google OAuth n\'est peut-être pas correctement configurée.';
+          } else if (errorDescription) {
+            errorMessage = errorDescription;
+          }
+          
+          Alert.alert('Erreur de connexion Google', errorMessage);
+          setGoogleLoading(false);
+          return;
+        }
         
         console.log('Tokens extracted:', { 
           hasAccessToken: !!accessToken, 
@@ -102,23 +184,26 @@ export default function AuthScreen() {
         
         if (accessToken) {
           console.log('Setting session with tokens...');
-          const { error } = await supabase.auth.setSession({
+          const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken || '',
           });
           
-          if (error) {
-            console.error('Error setting session:', error);
-            Alert.alert('Erreur', 'Erreur lors de la connexion');
+          if (sessionError) {
+            console.error('Error setting session:', sessionError);
+            Alert.alert('Erreur', 'Erreur lors de la création de la session: ' + sessionError.message);
             setGoogleLoading(false);
           } else {
             console.log('Session set successfully!');
             // Le useEffect qui surveille user va gérer la redirection
           }
+        } else {
+          Alert.alert('Erreur', 'Aucun token d\'accès trouvé dans la réponse Google');
+          setGoogleLoading(false);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error processing OAuth callback:', error);
-        Alert.alert('Erreur', 'Erreur lors de la connexion');
+        Alert.alert('Erreur', error.message || 'Erreur lors de la connexion');
         setGoogleLoading(false);
       } finally {
         setTimeout(() => {
@@ -176,9 +261,9 @@ export default function AuthScreen() {
         options: {
           redirectTo: appRedirectUrl,
           skipBrowserRedirect: true, // On gère l'ouverture du navigateur manuellement
-          // Ne pas forcer prompt: 'consent' car cela peut causer des problèmes avec les apps en mode Testing
           queryParams: {
             access_type: 'offline',
+            prompt: 'consent', // Force l'affichage du consentement pour s'assurer que les tokens sont toujours demandés
           },
         },
       });
@@ -255,6 +340,14 @@ export default function AuthScreen() {
           isProcessingOAuth.current = false;
         } else {
           console.log('Unexpected result type:', result.type);
+          // Vérifier si l'URL contient une erreur même avec un autre type
+          if ('url' in result && typeof result.url === 'string') {
+            const resultUrl = result.url as string;
+            if (resultUrl.includes('error=') || resultUrl.includes('access_denied')) {
+              await handleOAuthUrl(resultUrl);
+              return;
+            }
+          }
           // Attendre un peu pour voir si un deep link arrive
           setTimeout(() => {
             if (!isProcessingOAuth.current) {
@@ -297,7 +390,8 @@ export default function AuthScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={[styles.title, { color: colors.text }]}>
           {mode === 'login' ? 'Connexion' : 'Créer un compte'}
         </Text>
@@ -345,6 +439,8 @@ export default function AuthScreen() {
                 onChangeText={setDisplayName}
                 placeholder="Votre nom"
                 placeholderTextColor={colors.textTertiary}
+                returnKeyType="next"
+                blurOnSubmit={false}
               />
             </View>
 
@@ -360,6 +456,8 @@ export default function AuthScreen() {
                 placeholder="username"
                 placeholderTextColor={colors.textTertiary}
                 autoCapitalize="none"
+                returnKeyType="next"
+                blurOnSubmit={false}
               />
             </View>
           </>
@@ -378,6 +476,8 @@ export default function AuthScreen() {
             placeholderTextColor={colors.textTertiary}
             keyboardType="email-address"
             autoCapitalize="none"
+            returnKeyType="next"
+            blurOnSubmit={false}
           />
         </View>
 
@@ -393,6 +493,9 @@ export default function AuthScreen() {
             placeholder="••••••••"
             placeholderTextColor={colors.textTertiary}
             secureTextEntry
+            returnKeyType="done"
+            onSubmitEditing={Keyboard.dismiss}
+            blurOnSubmit={true}
           />
         </View>
 
@@ -424,6 +527,7 @@ export default function AuthScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+      </TouchableWithoutFeedback>
     </SafeAreaView>
   );
 }

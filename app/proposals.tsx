@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
@@ -16,10 +16,12 @@ export default function ProposalsScreen() {
   const [filter, setFilter] = useState<'all' | 'sent' | 'received'>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [proposalsWithUnreadMessages, setProposalsWithUnreadMessages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (user) {
       loadProposals();
+      loadUnreadMessages();
     }
   }, [user, filter]);
 
@@ -57,6 +59,44 @@ export default function ProposalsScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  }
+
+  async function loadUnreadMessages() {
+    if (!user) return;
+
+    try {
+      // Récupérer les notifications de type message_received non lues
+      const { data: notifications, error } = await supabase
+        .from('notifications')
+        .select('related_id')
+        .eq('user_id', user.id)
+        .eq('type', 'message_received')
+        .is('read_at', null);
+
+      if (error) {
+        // Si la table n'existe pas, on ignore silencieusement
+        if (error.code === 'PGRST205') {
+          console.warn('Table notifications does not exist. Please run the SQL script to create it.');
+          setProposalsWithUnreadMessages(new Set());
+        } else {
+          console.error('Error loading unread messages:', error);
+        }
+        return;
+      }
+
+      if (notifications) {
+        // Extraire les IDs des propositions qui ont des messages non lus
+        const proposalIds = new Set(
+          notifications
+            .map(n => n.related_id)
+            .filter(id => id !== null) as string[]
+        );
+        setProposalsWithUnreadMessages(proposalIds);
+      }
+    } catch (error) {
+      console.error('Error loading unread messages:', error);
+      setProposalsWithUnreadMessages(new Set());
     }
   }
 
@@ -131,6 +171,7 @@ export default function ProposalsScreen() {
             onRefresh={() => {
               setRefreshing(true);
               loadProposals();
+              loadUnreadMessages();
             }}
             tintColor={colors.textSecondary}
             colors={[colors.primary]}
@@ -169,10 +210,22 @@ export default function ProposalsScreen() {
                   </View>
 
                   <View style={styles.proposalUser}>
-                    <View style={styles.avatarPlaceholder}>
-                      <Text style={styles.avatarText}>
-                        {otherUser?.display_name?.[0]?.toUpperCase() || '?'}
-                      </Text>
+                    <View style={styles.avatarContainer}>
+                      {otherUser?.avatar_url ? (
+                        <Image
+                          source={{ uri: otherUser.avatar_url }}
+                          style={styles.avatar}
+                        />
+                      ) : (
+                        <View style={styles.avatarPlaceholder}>
+                          <Text style={styles.avatarText}>
+                            {otherUser?.display_name?.[0]?.toUpperCase() || '?'}
+                          </Text>
+                        </View>
+                      )}
+                      {proposalsWithUnreadMessages.has(proposal.id) && (
+                        <View style={styles.unreadMessageBadge} />
+                      )}
                     </View>
                     <View style={styles.proposalUserInfo}>
                       <Text style={[styles.proposalUserName, { color: colors.text }]}>{otherUser?.display_name}</Text>
@@ -185,6 +238,19 @@ export default function ProposalsScreen() {
                   <Text style={[styles.proposalMessage, { color: colors.textSecondary }]} numberOfLines={2}>
                     {proposal.message}
                   </Text>
+
+                  {proposal.status === 'pending' && (
+                    <TouchableOpacity
+                      style={[styles.discussButton, { backgroundColor: colors.primary }]}
+                      onPress={() => router.push({
+                        pathname: '/proposal/[id]',
+                        params: { id: proposal.id }
+                      })}
+                    >
+                      <MessageCircle size={16} color="#FFF" />
+                      <Text style={styles.discussButtonText}>Ouvrir la discussion</Text>
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -286,10 +352,29 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 12,
   },
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  unreadMessageBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#EF4444',
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
   avatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#F59E0B',
     alignItems: 'center',
     justifyContent: 'center',
@@ -297,7 +382,7 @@ const styles = StyleSheet.create({
   avatarText: {
     color: '#FFF',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 16,
   },
   proposalUserInfo: {
     flex: 1,
@@ -313,6 +398,21 @@ const styles = StyleSheet.create({
   proposalMessage: {
     fontSize: 14,
     lineHeight: 20,
+    marginBottom: 12,
+  },
+  discussButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  discussButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

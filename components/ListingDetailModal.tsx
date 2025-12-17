@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, Image, ActivityIndicator, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, Image, ActivityIndicator, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Listing, supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
@@ -6,6 +6,8 @@ import { X, MapPin, Star, TrendingUp, Sparkles, Shield, MessageCircle, Pencil, T
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { ReportModal } from './ReportModal';
+import { BottomNav } from './BottomNav';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type ListingDetailModalProps = {
   listing: Listing | null;
@@ -100,6 +102,29 @@ export function ListingDetailModal({ listing, visible, onClose, onSuccess, onUse
 
       if (insertError) throw insertError;
 
+      // Créer une notification pour le destinataire
+      if (data) {
+        const { data: notifData, error: notifError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: listing.user_id,
+            type: 'proposal_received',
+            message: `${user.display_name || user.username} vous a fait une proposition`,
+            related_id: data.id,
+          })
+          .select();
+
+        if (notifError) {
+          if (notifError.code === 'PGRST205') {
+            console.warn('Table notifications does not exist. Please run the SQL script.');
+          } else {
+            console.error('Error creating proposal notification:', notifError);
+          }
+        } else if (notifData) {
+          console.log('Proposal notification created:', notifData[0]?.id);
+        }
+      }
+
       setProposalMessage('');
       setProposalOffer('');
       setShowProposalForm(false);
@@ -180,15 +205,21 @@ export function ListingDetailModal({ listing, visible, onClose, onSuccess, onUse
       statusBarTranslucent
     >
       <View style={styles.overlay}>
-        <View style={[styles.modal, { backgroundColor: colors.surface }]}>
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{listing.title}</Text>
-            <TouchableOpacity onPress={onClose}>
-              <X size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+          <View style={[styles.modal, { backgroundColor: colors.surface }]}>
+            <View style={[styles.header, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{listing.title}</Text>
+              <TouchableOpacity onPress={onClose}>
+                <X size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
-          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+            <KeyboardAvoidingView 
+              style={styles.keyboardView}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            >
+              <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {imageUrl && (
               <Image source={{ uri: imageUrl }} style={styles.image} />
             )}
@@ -473,6 +504,8 @@ export function ListingDetailModal({ listing, visible, onClose, onSuccess, onUse
                         value={proposalOffer}
                         onChangeText={setProposalOffer}
                         placeholderTextColor={colors.textTertiary}
+                        returnKeyType="next"
+                        blurOnSubmit={false}
                       />
                     </View>
                     <View style={styles.formGroup}>
@@ -485,6 +518,8 @@ export function ListingDetailModal({ listing, visible, onClose, onSuccess, onUse
                         value={proposalMessage}
                         onChangeText={setProposalMessage}
                         placeholderTextColor={colors.textTertiary}
+                        returnKeyType="done"
+                        blurOnSubmit={true}
                       />
                     </View>
                     {proposalError && (
@@ -536,9 +571,12 @@ export function ListingDetailModal({ listing, visible, onClose, onSuccess, onUse
                 </TouchableOpacity>
               </View>
             )}
-          </ScrollView>
+              </ScrollView>
+            </KeyboardAvoidingView>
 
-        </View>
+            <BottomNav />
+          </View>
+        </SafeAreaView>
       </View>
 
       <ReportModal
@@ -558,11 +596,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
   },
+  safeArea: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
   modal: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    flex: 1,
     maxHeight: '95%',
-    minHeight: '80%',
+    justifyContent: 'space-between',
+  },
+  keyboardView: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -579,6 +625,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     padding: 20,
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   image: {
     width: '100%',

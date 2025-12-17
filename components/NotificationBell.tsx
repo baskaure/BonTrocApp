@@ -30,19 +30,30 @@ export function NotificationBell({ onPress }: NotificationBellProps) {
     if (!user) return;
     setLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (data) {
+      if (error) {
+        // Si la table n'existe pas, on ignore silencieusement
+        if (error.code === 'PGRST205') {
+          console.warn('Table notifications does not exist. Please run the SQL script to create it.');
+          setNotifications([]);
+          setUnreadCount(0);
+        } else {
+          console.error('Error loading notifications:', error);
+        }
+      } else if (data) {
         setNotifications(data);
         setUnreadCount(data.filter(n => !n.read_at).length);
       }
     } catch (error) {
       console.error('Error loading notifications:', error);
+      setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }

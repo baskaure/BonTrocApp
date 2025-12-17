@@ -16,6 +16,11 @@
     "associatedDomains": ["applinks:bontroc.app"],
     "android": {
       "package": "com.bontroc.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
       "intentFilters": [
         {
           "action": "VIEW",
@@ -27,10 +32,20 @@
           ],
           "category": ["BROWSABLE", "DEFAULT"]
         }
+      ],
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
       ]
     },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.bontroc.app",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Cette application a besoin d'accéder à vos photos pour que vous puissiez télécharger des images.",
+        "NSCameraUsageDescription": "Cette application a besoin d'accéder à votre caméra pour prendre des photos."
+      }
     },
     "web": {
       "bundler": "metro",

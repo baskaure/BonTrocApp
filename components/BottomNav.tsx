@@ -4,12 +4,14 @@ import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { Grid, List, Package } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNotificationBadges } from '@/hooks/useNotificationBadges';
 
 export function BottomNav() {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
   const { colors } = useTheme();
+  const badges = useNotificationBadges();
 
   const isActive = (path: string) => {
     if (path === '/' && pathname === '/') return true;
@@ -36,7 +38,14 @@ export function BottomNav() {
           style={styles.navButton}
           onPress={() => router.push('/proposals')}
         >
-          <List size={24} color={isActive('/proposals') ? colors.primary : colors.textSecondary} />
+          <View style={styles.iconContainer}>
+            <List size={24} color={isActive('/proposals') ? colors.primary : colors.textSecondary} />
+            {badges.proposals > 0 && (
+              <View style={[styles.badge, { backgroundColor: '#EF4444', borderColor: colors.background }]}>
+                <Text style={styles.badgeText}>{badges.proposals > 9 ? '9+' : String(badges.proposals)}</Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.navButtonText, { color: isActive('/proposals') ? colors.primary : colors.textSecondary }, isActive('/proposals') && styles.navButtonTextActive]}>
             Propositions
           </Text>
@@ -46,7 +55,14 @@ export function BottomNav() {
           style={styles.navButton}
           onPress={() => router.push('/exchanges')}
         >
-          <Package size={24} color={isActive('/exchanges') ? colors.primary : colors.textSecondary} />
+          <View style={styles.iconContainer}>
+            <Package size={24} color={isActive('/exchanges') ? colors.primary : colors.textSecondary} />
+            {badges.exchanges > 0 && (
+              <View style={[styles.badge, { backgroundColor: '#EF4444', borderColor: colors.background }]}>
+                <Text style={styles.badgeText}>{badges.exchanges > 9 ? '9+' : String(badges.exchanges)}</Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.navButtonText, { color: isActive('/exchanges') ? colors.primary : colors.textSecondary }, isActive('/exchanges') && styles.navButtonTextActive]}>
             Échanges
           </Text>
@@ -124,6 +140,27 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  iconContainer: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });
 
