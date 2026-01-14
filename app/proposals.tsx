@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { supabase, Proposal } from '@/lib/supabase';
@@ -12,23 +12,49 @@ export default function ProposalsScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Commencer à false pour éviter le flash
   const [filter, setFilter] = useState<'all' | 'sent' | 'received'>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proposalsWithUnreadMessages, setProposalsWithUnreadMessages] = useState<Set<string>>(new Set());
+  const hasLoadedRef = useRef(false);
+  const pathname = usePathname();
+  const previousPathnameRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (user) {
-      loadProposals();
-      loadUnreadMessages();
+      // Charger les propositions au montage ou changement d'utilisateur
+      if (!hasLoadedRef.current) {
+        // Première fois : charger avec loader seulement si on n'a pas de données
+        if (proposals.length === 0) {
+          setLoading(true);
+        }
+        loadProposals(proposals.length > 0); // Silent si on a déjà des données
+        loadUnreadMessages();
+        hasLoadedRef.current = true;
+      } else if (previousPathnameRef.current !== pathname && pathname === '/proposals') {
+        // On vient de naviguer vers cette page : recharger silencieusement (toujours silent)
+        loadProposals(true);
+        loadUnreadMessages();
+      }
+      previousPathnameRef.current = pathname;
     }
-  }, [user, filter]);
+  }, [user, pathname]);
 
-  async function loadProposals() {
+  useEffect(() => {
+    if (user && hasLoadedRef.current) {
+      // Charger silencieusement lors du changement de filtre (pas de loader)
+      loadProposals(true);
+    }
+  }, [filter]);
+
+  async function loadProposals(silent = false) {
     if (!user) return;
 
-    if (!refreshing) setLoading(true);
+    // Ne jamais afficher le loader si on a déjà des données (évite le flash)
+    if (!silent && !refreshing && proposals.length === 0) {
+      setLoading(true);
+    }
     setError(null);
     try {
       let query = supabase
@@ -126,7 +152,9 @@ export default function ProposalsScreen() {
 
   const { colors } = useTheme();
 
-  if (loading) {
+  // Ne jamais afficher le loader si on a déjà des données (évite le flash lors de la navigation)
+  // Le loader ne s'affiche que lors du premier chargement (quand proposals.length === 0)
+  if (loading && proposals.length === 0 && hasLoadedRef.current === false) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <View style={styles.centerContainer}>

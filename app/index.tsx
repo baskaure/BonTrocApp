@@ -38,9 +38,10 @@ export default function HomeScreen() {
   }, [authLoading, user]);
 
   // Charger les listings quand les filtres changent (seulement si user est connecté)
+  // Chargement silencieux sans loader pour éviter les "sauts" d'écran
   useEffect(() => {
     if (user && !authLoading) {
-      loadListings();
+      loadListings(true);
     }
   }, [filterType, filterMode, filterCategory, searchQuery]);
 
@@ -52,8 +53,8 @@ export default function HomeScreen() {
     if (!error && data) setCategories(data);
   }
 
-  async function loadListings() {
-    if (!refreshing) setLoading(true);
+  async function loadListings(silent = false) {
+    if (!silent && !refreshing) setLoading(true);
     setError(null);
     try {
       let query = supabase

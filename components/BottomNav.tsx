@@ -26,7 +26,11 @@ export function BottomNav() {
       <View style={[styles.container, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => router.push('/')}
+          onPress={() => {
+            if (!isActive('/')) {
+              router.push('/');
+            }
+          }}
         >
           <Grid size={24} color={isActive('/') ? colors.primary : colors.textSecondary} />
           <Text style={[styles.navButtonText, { color: isActive('/') ? colors.primary : colors.textSecondary }, isActive('/') && styles.navButtonTextActive]}>
@@ -36,7 +40,11 @@ export function BottomNav() {
 
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => router.push('/proposals')}
+          onPress={() => {
+            if (!isActive('/proposals')) {
+              router.push('/proposals');
+            }
+          }}
         >
           <View style={styles.iconContainer}>
             <List size={24} color={isActive('/proposals') ? colors.primary : colors.textSecondary} />
@@ -53,7 +61,11 @@ export function BottomNav() {
 
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => router.push('/exchanges')}
+          onPress={() => {
+            if (!isActive('/exchanges')) {
+              router.push('/exchanges');
+            }
+          }}
         >
           <View style={styles.iconContainer}>
             <Package size={24} color={isActive('/exchanges') ? colors.primary : colors.textSecondary} />
@@ -70,7 +82,11 @@ export function BottomNav() {
 
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => router.push('/profile')}
+          onPress={() => {
+            if (!isActive('/profile')) {
+              router.push('/profile');
+            }
+          }}
         >
           {user.avatar_url ? (
             <Image source={{ uri: user.avatar_url }} style={[styles.profileAvatar, { borderColor: colors.border }]} />

@@ -33,12 +33,19 @@ export default function ExchangesScreen() {
     if (user) {
       loadExchanges();
     }
-  }, [user, filterStatus]);
+  }, [user]);
 
-  async function loadExchanges() {
+  useEffect(() => {
+    if (user) {
+      // Charger silencieusement lors du changement de filtre (pas de loader)
+      loadExchanges(true);
+    }
+  }, [filterStatus]);
+
+  async function loadExchanges(silent = false) {
     if (!user) return;
 
-    if (!refreshing) setLoading(true);
+    if (!silent && !refreshing) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('exchanges')
