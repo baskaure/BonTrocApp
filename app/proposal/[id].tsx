@@ -285,7 +285,7 @@ export default function ProposalDetailScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <>
+            <View>
               {/* Carte de proposition améliorée */}
               <View style={[styles.proposalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 {/* Informations utilisateur */}
@@ -471,7 +471,7 @@ export default function ProposalDetailScreen() {
                   <ChatWindow proposalId={proposal.id} />
                 </View>
               </View>
-            </>
+            </View>
           </TouchableWithoutFeedback>
         </ScrollView>
       </KeyboardAvoidingView>

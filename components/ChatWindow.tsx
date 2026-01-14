@@ -165,6 +165,15 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
         const senderName = user.display_name || user.email || 'Un utilisateur';
         
         try {
+          // Vérifier la session avant l'insertion
+          const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError || !sessionData?.session) {
+            console.warn('No active session when creating notification:', sessionError);
+            // Ne pas bloquer l'envoi du message si la notification échoue
+            return;
+          }
+          
           const { data: notifData, error: notifError } = await supabase
             .from('notifications')
             .insert({
@@ -178,6 +187,31 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
           if (notifError) {
             if (notifError.code === 'PGRST205') {
               console.warn('Table notifications does not exist. Please run the SQL script.');
+            } else if (notifError.code === '42501') {
+              // Erreur RLS - essayer avec la fonction Supabase en fallback
+              // (Silencieux car c'est un fallback normal)
+              
+              // Essayer avec la fonction Supabase (si elle existe)
+              try {
+                const { data: funcData, error: funcError } = await supabase.rpc('create_notification', {
+                  p_user_id: otherUserId,
+                  p_type: 'message_received',
+                  p_message: `${senderName} vous a envoyé un message`,
+                  p_related_id: proposal.id || proposalId,
+                });
+                
+                if (funcError) {
+                  console.error('Error using create_notification function:', funcError);
+                } else {
+                  // Notification créée avec succès via la fonction
+                  // (Log silencieux en mode production, mais utile pour le debug)
+                  if (__DEV__) {
+                    console.log('Notification created via function:', funcData);
+                  }
+                }
+              } catch (funcErr) {
+                console.error('Exception calling create_notification function:', funcErr);
+              }
             } else {
               console.error('Error creating message notification:', notifError);
             }
