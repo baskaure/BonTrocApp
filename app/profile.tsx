@@ -102,11 +102,19 @@ export default function ProfileScreen() {
   const uploadProfileMedia = async (type: 'avatar' | 'banner') => {
     if (!user) return;
 
+    // Demander la permission d'accès à la bibliothèque de photos
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour accéder aux photos');
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
+      // @ts-ignore - MediaTypeOptions est déprécié mais fonctionne toujours
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: type === 'avatar' ? [1, 1] : [16, 9],
-      quality: 0.8,
+      quality: 0.9,
     });
 
     if (result.canceled) return;
@@ -116,41 +124,63 @@ export default function ProfileScreen() {
 
     try {
       const file = result.assets[0];
-      const fileExt = file.uri.split('.').pop() || 'jpg';
-      const fileName = `${type}/${user.id}-${Date.now()}.${fileExt}`;
-      const mime = file.mimeType || `image/${fileExt}`;
+      
+      // Utiliser .jpg pour éviter les problèmes de transparence
+      const fileName = `${type}/${user.id}-${Date.now()}.jpg`;
+      const mime = file.mimeType || 'image/jpeg';
 
-      if (!mime.startsWith('image/')) {
-        throw new Error('Format de fichier non supporté. Images uniquement.');
-      }
-
-      const info = await FileSystem.getInfoAsync(file.uri);
-      const size = info.size || file.fileSize;
+      // Vérifier la taille du fichier
+      const size = file.fileSize || 0;
       const maxBytes = 5 * 1024 * 1024; // 5 Mo
-      if (size && size > maxBytes) {
+      if (size > maxBytes) {
         throw new Error('Image trop volumineuse (max 5 Mo).');
       }
 
+      // Pour React Native, il faut lire le fichier et l'uploader via fetch
+      // Lire le fichier en base64
+      const base64 = await FileSystem.readAsStringAsync(file.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // Convertir base64 en ArrayBuffer
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+
+      // Upload vers Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-media')
-        .upload(fileName, {
-          uri: file.uri,
-          type: mime,
-        } as any, {
+        .upload(fileName, byteArray, {
           upsert: true,
           contentType: mime,
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Upload error details:', uploadError);
+        throw uploadError;
+      }
 
+      // Obtenir l'URL publique avec un timestamp pour forcer le rechargement
       const { data: urlData } = supabase.storage.from('profile-media').getPublicUrl(fileName);
+      if (!urlData?.publicUrl) {
+        throw new Error('Impossible de récupérer l\'URL publique de l\'image');
+      }
+      
+      // Ajouter un timestamp pour éviter le cache
+      const imageUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      
+      console.log('Image uploaded successfully:', imageUrl);
       
       if (type === 'avatar') {
-        setFormData((prev) => ({ ...prev, avatar_url: urlData.publicUrl }));
+        setFormData((prev) => ({ ...prev, avatar_url: imageUrl }));
       } else {
-        setFormData((prev) => ({ ...prev, banner_url: urlData.publicUrl }));
+        setFormData((prev) => ({ ...prev, banner_url: imageUrl }));
       }
     } catch (err: any) {
+      console.error('Upload error:', err);
       setError(err.message || 'Erreur lors du téléversement');
     } finally {
       setMediaUploading((prev) => ({ ...prev, [type]: false }));
@@ -230,7 +260,14 @@ export default function ProfileScreen() {
         <View style={styles.profileCard}>
           <View style={styles.bannerContainer}>
             {formData.banner_url ? (
-              <Image source={{ uri: formData.banner_url }} style={styles.banner} />
+              <Image 
+                source={{ uri: formData.banner_url }} 
+                style={styles.banner}
+                onError={(e) => {
+                  console.error('Error loading banner image:', e.nativeEvent.error);
+                  setError('Erreur lors du chargement de la bannière');
+                }}
+              />
             ) : (
               <View style={styles.bannerPlaceholder} />
             )}
@@ -255,7 +292,16 @@ export default function ProfileScreen() {
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
               {formData.avatar_url ? (
-                <Image source={{ uri: formData.avatar_url }} style={[styles.avatar, { borderColor: colors.surface }]} />
+                <Image 
+                  source={{ uri: formData.avatar_url }} 
+                  style={[styles.avatar, { borderColor: colors.surface }]}
+                  onError={(e) => {
+                    console.error('Error loading avatar image:', e.nativeEvent.error);
+                    setError('Erreur lors du chargement de l\'avatar');
+                    // Réinitialiser l'URL en cas d'erreur
+                    setFormData((prev) => ({ ...prev, avatar_url: user.avatar_url || '' }));
+                  }}
+                />
               ) : (
                 <View style={[styles.avatarPlaceholder, { borderColor: colors.surface }]}>
                   <Text style={styles.avatarText}>
@@ -795,6 +841,7 @@ const styles = StyleSheet.create({
   banner: {
     width: '100%',
     height: '100%',
+    resizeMode: 'cover',
   },
   bannerPlaceholder: {
     width: '100%',
@@ -838,6 +885,7 @@ const styles = StyleSheet.create({
     borderRadius: 64,
     borderWidth: 4,
     borderColor: '#FFF',
+    resizeMode: 'cover',
   },
   avatarPlaceholder: {
     width: 128,

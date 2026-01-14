@@ -63,6 +63,7 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
+      // @ts-ignore - MediaTypeOptions est déprécié mais fonctionne toujours
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
       quality: 0.8,
