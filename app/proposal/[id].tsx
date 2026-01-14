@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Activi
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { supabase, Proposal } from '@/lib/supabase';
-import { ArrowLeft, MessageCircle, CheckCircle, XCircle, Send } from 'lucide-react-native';
+import { ArrowLeft, MessageCircle, CheckCircle, XCircle, Send, Lightbulb, User, Clock, FileText } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { BottomNav } from '@/components/BottomNav';
@@ -17,7 +17,6 @@ export default function ProposalDetailScreen() {
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showChat, setShowChat] = useState(true); // Par défaut, la discussion est ouverte
   const [showCounterForm, setShowCounterForm] = useState(false);
   const [counterMessage, setCounterMessage] = useState('');
   const [counterOffer, setCounterOffer] = useState('');
@@ -60,16 +59,12 @@ export default function ProposalDetailScreen() {
             .is('read_at', null)
             .select();
           
-          if (updateError) {
-            // Si la table n'existe pas, on ignore silencieusement
-            if (updateError.code !== 'PGRST205') {
-              console.error('Error marking notifications as read:', updateError);
-            }
+          if (updateError && updateError.code !== 'PGRST205') {
+            console.error('Error marking notifications as read:', updateError);
           } else if (updated && updated.length > 0) {
             console.log(`Marked ${updated.length} notifications as read for proposal ${data.id}`);
           }
         } catch (err: any) {
-          // Ignorer les erreurs si la table n'existe pas
           if (err?.code !== 'PGRST205') {
             console.error('Error in mark as read:', err);
           }
@@ -99,7 +94,7 @@ export default function ProposalDetailScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()}>
-            <ArrowLeft size={24} color={colors.textSecondary} />
+            <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Retour</Text>
           <View style={{ width: 24 }} />
@@ -116,76 +111,91 @@ export default function ProposalDetailScreen() {
   const otherUser = isReceiver ? proposal.from_user : proposal.to_user;
 
   const handleAccept = async () => {
-    setActionError('');
-    setActionLoading(true);
-    try {
-      const { error: updateError } = await supabase
-        .from('proposals')
-        .update({ status: 'accepted' })
-        .eq('id', proposal.id);
+    Alert.alert(
+      'Accepter la proposition',
+      'Êtes-vous sûr de vouloir accepter cette proposition ? Un contrat sera généré.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Accepter',
+          style: 'default',
+          onPress: async () => {
+            setActionError('');
+            setActionLoading(true);
+            try {
+              const { error: updateError } = await supabase
+                .from('proposals')
+                .update({ status: 'accepted' })
+                .eq('id', proposal.id);
 
-      if (updateError) throw updateError;
+              if (updateError) throw updateError;
 
-      // Créer une notification pour l'utilisateur qui a fait la proposition
-      if (proposal.from_user_id !== user?.id) {
-        try {
-          const { data: notifData, error: notifError } = await supabase
-            .from('notifications')
-            .insert({
-              user_id: proposal.from_user_id,
-              type: 'proposal_accepted',
-              message: `${proposal.to_user?.display_name || 'Un utilisateur'} a accepté votre proposition`,
-              related_id: proposal.id,
-            })
-            .select();
+              // Créer une notification
+              if (proposal.from_user_id !== user?.id) {
+                try {
+                  await supabase.from('notifications').insert({
+                    user_id: proposal.from_user_id,
+                    type: 'proposal_accepted',
+                    message: `${proposal.to_user?.display_name || 'Un utilisateur'} a accepté votre proposition`,
+                    related_id: proposal.id,
+                  });
+                } catch (err) {
+                  console.error('Error creating notification:', err);
+                }
+              }
 
-          if (notifError) {
-            if (notifError.code === 'PGRST205') {
-              console.warn('Table notifications does not exist. Please run the SQL script.');
-            } else {
-              console.error('Error creating proposal_accepted notification:', notifError);
+              // Générer le contrat
+              try {
+                await supabase.functions.invoke('generate-contract-pdf', {
+                  body: { proposal_id: proposal.id },
+                });
+              } catch (contractError) {
+                console.error('Error generating contract:', contractError);
+              }
+
+              Alert.alert('Succès', 'Proposition acceptée ! Le contrat a été généré.');
+              await loadProposal();
+            } catch (err: any) {
+              setActionError(err.message || 'Erreur lors de l\'acceptation');
+              Alert.alert('Erreur', err.message || 'Erreur lors de l\'acceptation');
+            } finally {
+              setActionLoading(false);
             }
-          } else if (notifData) {
-            console.log('Proposal accepted notification created:', notifData[0]?.id);
-          }
-        } catch (err) {
-          console.error('Exception creating proposal_accepted notification:', err);
-        }
-      }
-
-      // Générer le contrat
-      const { error: contractFnError } = await supabase.functions.invoke('generate-contract-pdf', {
-        body: { proposal_id: proposal.id },
-      });
-
-      if (contractFnError) {
-        console.error('Error generating contract:', contractFnError);
-      }
-
-      Alert.alert('Succès', 'Proposition acceptée ! Le contrat a été généré.');
-      await loadProposal();
-    } catch (err: any) {
-      setActionError(err.message || 'Erreur lors de l\'acceptation');
-    } finally {
-      setActionLoading(false);
-    }
+          },
+        },
+      ]
+    );
   };
 
   const handleRefuse = async () => {
-    setActionLoading(true);
-    try {
-      const { error } = await supabase
-        .from('proposals')
-        .update({ status: 'refused' })
-        .eq('id', proposal.id);
+    Alert.alert(
+      'Refuser la proposition',
+      'Êtes-vous sûr de vouloir refuser cette proposition ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Refuser',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(true);
+            try {
+              const { error } = await supabase
+                .from('proposals')
+                .update({ status: 'refused' })
+                .eq('id', proposal.id);
 
-      if (error) throw error;
-      await loadProposal();
-    } catch (error) {
-      console.error('Error refusing proposal:', error);
-    } finally {
-      setActionLoading(false);
-    }
+              if (error) throw error;
+              await loadProposal();
+              Alert.alert('Proposition refusée', 'La proposition a été refusée.');
+            } catch (error: any) {
+              Alert.alert('Erreur', error.message || 'Erreur lors du refus');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleCounter = async () => {
@@ -221,34 +231,46 @@ export default function ProposalDetailScreen() {
       Alert.alert('Succès', 'Contre-proposition envoyée !');
     } catch (error: any) {
       setActionError(error.message || 'Erreur lors de la contre-proposition');
+      Alert.alert('Erreur', error.message || 'Erreur lors de la contre-proposition');
     } finally {
       setActionLoading(false);
     }
   };
 
+  const getStatusConfig = () => {
+    switch (proposal.status) {
+      case 'accepted':
+        return { label: 'Acceptée', color: colors.success, bgColor: colors.successLight };
+      case 'refused':
+        return { label: 'Refusée', color: colors.error, bgColor: colors.errorLight };
+      case 'countered':
+        return { label: 'Contre-proposition', color: colors.warning, bgColor: colors.warningLight };
+      default:
+        return { label: 'En attente', color: colors.warning, bgColor: colors.warningLight };
+    }
+  };
+
+  const statusConfig = getStatusConfig();
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft size={24} color={colors.textSecondary} />
+      {/* Header amélioré */}
+      <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <ArrowLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
+        <View style={styles.headerContent}>
           <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
             {proposal.listing?.title || 'Proposition'}
           </Text>
-          <View style={[styles.statusBadge, { backgroundColor: proposal.status === 'accepted' ? colors.successLight : proposal.status === 'refused' ? colors.errorLight : colors.warningLight }]}>
-            <Text style={[
-              styles.statusText,
-              { color: proposal.status === 'accepted' ? colors.success : proposal.status === 'refused' ? colors.error : colors.warning }
-            ]}>
-              {proposal.status === 'accepted' ? 'Acceptée' :
-               proposal.status === 'refused' ? 'Refusée' :
-               proposal.status === 'countered' ? 'Contre-proposition' :
-               'En attente'}
+          <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
+            <Text style={[styles.statusText, { color: statusConfig.color }]}>
+              {statusConfig.label}
             </Text>
           </View>
         </View>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <KeyboardAvoidingView 
@@ -256,144 +278,202 @@ export default function ProposalDetailScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        {/* Section compacte avec infos de la proposition */}
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView 
-            style={styles.infoScrollView}
-            contentContainerStyle={styles.infoScrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-          <View style={styles.compactInfo}>
-            <View style={styles.userRow}>
-              {otherUser?.avatar_url ? (
-                <Image
-                  source={{ uri: otherUser.avatar_url }}
-                  style={styles.avatar}
-                />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarText}>
-                    {otherUser?.display_name?.[0]?.toUpperCase() || '?'}
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <>
+              {/* Carte de proposition améliorée */}
+              <View style={[styles.proposalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {/* Informations utilisateur */}
+                <View style={styles.userSection}>
+                  <View style={styles.userInfo}>
+                    {otherUser?.avatar_url ? (
+                      <Image
+                        source={{ uri: otherUser.avatar_url }}
+                        style={styles.avatar}
+                      />
+                    ) : (
+                      <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+                        <Text style={styles.avatarText}>
+                          {otherUser?.display_name?.[0]?.toUpperCase() || '?'}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.userDetails}>
+                      <Text style={[styles.userName, { color: colors.text }]}>
+                        {otherUser?.display_name || 'Utilisateur'}
+                      </Text>
+                      <Text style={[styles.userMeta, { color: colors.textSecondary }]}>
+                        {isReceiver ? 'Vous a fait une proposition' : 'Vous avez fait une proposition'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.dateText, { color: colors.textTertiary }]}>
+                    {new Date(proposal.created_at).toLocaleDateString('fr-FR', {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
                   </Text>
                 </View>
-              )}
-              <Text style={[styles.userName, { color: colors.text }]}>
-                {otherUser?.display_name}
-              </Text>
-            </View>
 
-            <View style={styles.messagePreview}>
-              <Text style={[styles.messagePreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
-                {proposal.message}
-              </Text>
-            </View>
+                {/* Message de la proposition */}
+                <View style={[styles.messageSection, { borderTopColor: colors.border }]}>
+                  <View style={styles.sectionHeader}>
+                    <FileText size={16} color={colors.primary} />
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Message</Text>
+                  </View>
+                  <Text style={[styles.messageText, { color: colors.text }]}>
+                    {proposal.message}
+                  </Text>
+                </View>
 
-            {proposal.offer_payload?.description && (
-              <View style={styles.offerPreview}>
-                <Text style={[styles.offerPreviewText, { color: colors.textSecondary }]} numberOfLines={1}>
-                  💡 {proposal.offer_payload.description}
-                </Text>
-              </View>
-            )}
-
-            {proposal.status === 'pending' && isReceiver && !showCounterForm && (
-              <View style={styles.quickActions}>
-                <TouchableOpacity
-                  style={[styles.quickActionButton, styles.acceptButton, { backgroundColor: colors.success }]}
-                  onPress={handleAccept}
-                  disabled={actionLoading}
-                >
-                  <CheckCircle size={16} color="#FFF" />
-                  <Text style={styles.quickActionText}>Accepter</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.quickActionButton, styles.counterButton, { backgroundColor: colors.warning }]}
-                  onPress={() => setShowCounterForm(true)}
-                  disabled={actionLoading}
-                >
-                  <Send size={16} color="#FFF" />
-                  <Text style={styles.quickActionText}>Contre-proposer</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.quickActionButton, styles.refuseButton, { backgroundColor: colors.error }]}
-                  onPress={handleRefuse}
-                  disabled={actionLoading}
-                >
-                  <XCircle size={16} color="#FFF" />
-                  <Text style={styles.quickActionText}>Refuser</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {showCounterForm && (
-              <View style={[styles.counterForm, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.counterFormTitle, { color: colors.text }]}>Contre-proposition</Text>
-                <TextInput
-                  style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                  multiline
-                  numberOfLines={3}
-                  placeholder="Ce que vous proposez..."
-                  value={counterOffer}
-                  onChangeText={setCounterOffer}
-                  placeholderTextColor={colors.textTertiary}
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-                <TextInput
-                  style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                  multiline
-                  numberOfLines={2}
-                  placeholder="Message..."
-                  value={counterMessage}
-                  onChangeText={setCounterMessage}
-                  placeholderTextColor={colors.textTertiary}
-                  returnKeyType="done"
-                  onSubmitEditing={Keyboard.dismiss}
-                  blurOnSubmit={true}
-                />
-                {actionError && (
-                  <Text style={[styles.errorText, { color: colors.error }]}>{actionError}</Text>
+                {/* Offre proposée */}
+                {proposal.offer_payload?.description && (
+                  <View style={[styles.offerSection, { borderTopColor: colors.border }]}>
+                    <View style={styles.sectionHeader}>
+                      <Lightbulb size={16} color={colors.warning} fill={colors.warning} />
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>Ce qui est proposé</Text>
+                    </View>
+                    <View style={[styles.offerBox, { backgroundColor: colors.primaryLight }]}>
+                      <Text style={[styles.offerText, { color: colors.text }]}>
+                        {proposal.offer_payload.description}
+                      </Text>
+                    </View>
+                  </View>
                 )}
-                <View style={styles.counterActions}>
-                  <TouchableOpacity
-                    style={[styles.counterActionButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                    onPress={() => {
-                      setShowCounterForm(false);
-                      setCounterMessage('');
-                      setCounterOffer('');
-                    }}
-                  >
-                    <Text style={[styles.counterActionText, { color: colors.text }]}>Annuler</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.counterActionButton, { backgroundColor: colors.primary }]}
-                    onPress={handleCounter}
-                    disabled={actionLoading}
-                  >
-                    {actionLoading ? (
-                      <ActivityIndicator color="#FFF" size="small" />
-                    ) : (
-                      <Text style={styles.counterActionTextPrimary}>Envoyer</Text>
+
+                {/* Boutons d'action - seulement si on est le receveur et que c'est en attente */}
+                {proposal.status === 'pending' && isReceiver && !showCounterForm && (
+                  <View style={[styles.actionsSection, { borderTopColor: colors.border }]}>
+                    {actionError && (
+                      <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
+                        <Text style={[styles.errorText, { color: colors.error }]}>{actionError}</Text>
+                      </View>
                     )}
-                  </TouchableOpacity>
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.acceptButton, { backgroundColor: colors.success }]}
+                        onPress={handleAccept}
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? (
+                          <ActivityIndicator color="#FFF" size="small" />
+                        ) : (
+                          <>
+                            <CheckCircle size={18} color="#FFF" />
+                            <Text style={styles.actionButtonText}>Accepter</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.counterButton, { backgroundColor: colors.warning }]}
+                        onPress={() => setShowCounterForm(true)}
+                        disabled={actionLoading}
+                      >
+                        <Send size={18} color="#FFF" />
+                        <Text style={styles.actionButtonText}>Contre-proposer</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.refuseButton, { backgroundColor: colors.error }]}
+                        onPress={handleRefuse}
+                        disabled={actionLoading}
+                      >
+                        <XCircle size={18} color="#FFF" />
+                        <Text style={styles.actionButtonText}>Refuser</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* Formulaire de contre-proposition */}
+                {showCounterForm && (
+                  <View style={[styles.counterForm, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
+                    <View style={styles.sectionHeader}>
+                      <Send size={16} color={colors.primary} />
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>Créer une contre-proposition</Text>
+                    </View>
+                    <View style={styles.formGroup}>
+                      <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Ce que vous proposez *</Text>
+                      <TextInput
+                        style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                        multiline
+                        numberOfLines={3}
+                        placeholder="Décrivez ce que vous proposez en échange..."
+                        value={counterOffer}
+                        onChangeText={setCounterOffer}
+                        placeholderTextColor={colors.textTertiary}
+                        returnKeyType="next"
+                      />
+                    </View>
+                    <View style={styles.formGroup}>
+                      <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Message *</Text>
+                      <TextInput
+                        style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
+                        multiline
+                        numberOfLines={2}
+                        placeholder="Ajoutez un message pour accompagner votre contre-proposition..."
+                        value={counterMessage}
+                        onChangeText={setCounterMessage}
+                        placeholderTextColor={colors.textTertiary}
+                        returnKeyType="done"
+                        onSubmitEditing={Keyboard.dismiss}
+                      />
+                    </View>
+                    {actionError && (
+                      <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
+                        <Text style={[styles.errorText, { color: colors.error }]}>{actionError}</Text>
+                      </View>
+                    )}
+                    <View style={styles.counterActions}>
+                      <TouchableOpacity
+                        style={[styles.counterActionButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                        onPress={() => {
+                          setShowCounterForm(false);
+                          setCounterMessage('');
+                          setCounterOffer('');
+                          setActionError('');
+                        }}
+                      >
+                        <Text style={[styles.counterActionText, { color: colors.text }]}>Annuler</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.counterActionButton, { backgroundColor: colors.primary }]}
+                        onPress={handleCounter}
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? (
+                          <ActivityIndicator color="#FFF" size="small" />
+                        ) : (
+                          <>
+                            <Send size={16} color="#FFF" />
+                            <Text style={styles.counterActionTextPrimary}>Envoyer</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Section Discussion */}
+              <View style={[styles.chatSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[styles.chatHeader, { borderBottomColor: colors.border }]}>
+                  <MessageCircle size={20} color={colors.primary} />
+                  <Text style={[styles.chatHeaderText, { color: colors.text }]}>Discussion</Text>
+                </View>
+                <View style={styles.chatContainer}>
+                  <ChatWindow proposalId={proposal.id} />
                 </View>
               </View>
-            )}
-          </View>
-          </ScrollView>
-        </TouchableWithoutFeedback>
-
-        {/* Section discussion - prend la majorité de l'espace */}
-        <View style={styles.chatSection}>
-          <View style={[styles.chatHeader, { borderBottomColor: colors.border }]}>
-            <MessageCircle size={20} color={colors.primary} />
-            <Text style={[styles.chatHeaderText, { color: colors.text }]}>Discussion</Text>
-          </View>
-          <View style={styles.chatContainer}>
-            <ChatWindow proposalId={proposal.id} />
-          </View>
-        </View>
+            </>
+          </TouchableWithoutFeedback>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       <BottomNav />
@@ -413,15 +493,17 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  headerTitleContainer: {
+  backButton: {
+    padding: 4,
+    marginRight: 8,
+  },
+  headerContent: {
     flex: 1,
     alignItems: 'center',
-    marginHorizontal: 8,
   },
   headerTitle: {
     fontSize: 16,
@@ -429,89 +511,135 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
+    textTransform: 'uppercase',
   },
   keyboardView: {
     flex: 1,
   },
-  infoScrollView: {
-    maxHeight: 180,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+  scrollView: {
+    flex: 1,
   },
-  infoScrollContent: {
-    padding: 12,
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
   },
-  compactInfo: {
-    gap: 8,
+  proposalCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: 16,
   },
-  userRow: {
+  userSection: {
+    padding: 16,
+  },
+  userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
+    marginBottom: 8,
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: '#FFF',
   },
   avatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F59E0B',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
   },
   avatarText: {
     color: '#FFF',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 24,
+  },
+  userDetails: {
+    flex: 1,
   },
   userName: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
-    flex: 1,
+    marginBottom: 4,
   },
-  messagePreview: {
-    marginLeft: 40,
-  },
-  messagePreviewText: {
+  userMeta: {
     fontSize: 13,
-    lineHeight: 18,
   },
-  offerPreview: {
-    marginLeft: 40,
-    paddingTop: 4,
-  },
-  offerPreviewText: {
+  dateText: {
     fontSize: 12,
-    fontStyle: 'italic',
+    marginLeft: 68,
   },
-  quickActions: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 4,
-    marginLeft: 40,
+  messageSection: {
+    padding: 16,
+    borderTopWidth: 1,
   },
-  quickActionButton: {
+  offerSection: {
+    padding: 16,
+    borderTopWidth: 1,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    flex: 1,
+    gap: 8,
+    marginBottom: 12,
   },
-  quickActionText: {
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  messageText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  offerBox: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  offerText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  actionsSection: {
+    padding: 16,
+    borderTopWidth: 1,
+  },
+  actionButtons: {
+    gap: 10,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+  },
+  actionButtonText: {
     color: '#FFF',
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: '600',
   },
   acceptButton: {
@@ -524,66 +652,76 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444',
   },
   counterForm: {
-    marginTop: 8,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
+    padding: 16,
+    borderTopWidth: 1,
   },
-  counterFormTitle: {
+  formGroup: {
+    marginBottom: 16,
+  },
+  formLabel: {
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 8,
   },
   textArea: {
     borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 12,
+    padding: 12,
     fontSize: 14,
-    marginBottom: 8,
-    minHeight: 60,
+    minHeight: 80,
     textAlignVertical: 'top',
   },
+  errorBox: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
   errorText: {
-    fontSize: 12,
-    marginBottom: 8,
+    fontSize: 13,
   },
   counterActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
+    marginTop: 8,
   },
   counterActionButton: {
     flex: 1,
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   counterActionText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
   },
   counterActionTextPrimary: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: '#FFF',
   },
   chatSection: {
-    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    minHeight: 400,
   },
   chatHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 12,
+    padding: 16,
     borderBottomWidth: 1,
-    backgroundColor: '#F8FAFC',
   },
   chatHeaderText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
   },
   chatContainer: {
-    flex: 1,
+    minHeight: 300,
   },
   emptyText: {
     fontSize: 16,

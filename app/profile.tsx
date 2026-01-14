@@ -561,7 +561,7 @@ export default function ProfileScreen() {
               </View>
 
               <TouchableOpacity
-                style={styles.saveButton}
+                style={[styles.saveButton, { backgroundColor: colors.primary }]}
                 onPress={handleSubmit}
                 disabled={loading}
               >
