@@ -230,12 +230,25 @@ export default function PublicProfileScreen() {
             )}
 
             <View style={styles.reviewsSection}>
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Avis reçus ({reviews.length})</Text>
+              <View style={styles.reviewsSectionHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Avis reçus ({reviews.length})</Text>
+                {reviews.length > 2 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      // @ts-ignore - Route dynamique
+                      router.push(`/reviews/${id}`);
+                    }}
+                    style={styles.seeMoreButton}
+                  >
+                    <Text style={[styles.seeMoreText, { color: colors.primary }]}>Voir plus</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               {reviews.length === 0 ? (
                 <Text style={styles.emptyText}>Aucun avis pour le moment</Text>
               ) : (
                 <View style={styles.reviewsList}>
-                    {reviews.map((review) => (
+                    {reviews.slice(0, 2).map((review) => (
                       <View
                         key={review.id}
                         style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
@@ -493,6 +506,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     padding: 12,
+  },
+  reviewsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  seeMoreButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  seeMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   reviewsSection: {
     marginTop: 24,

@@ -715,7 +715,20 @@ export default function ProfileScreen() {
               </View>
 
               <View style={[styles.reviewsSection, { borderTopColor: colors.border }]}>
-                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Avis reçus ({reviews.length})</Text>
+                <View style={styles.reviewsSectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Avis reçus ({reviews.length})</Text>
+                  {reviews.length > 2 && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        // @ts-ignore - Route dynamique
+                        router.push(`/reviews/${user.id}`);
+                      }}
+                      style={styles.seeMoreButton}
+                    >
+                      <Text style={[styles.seeMoreText, { color: colors.primary }]}>Voir plus</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
                 {reviewsLoading ? (
                   <View style={styles.centerContainer}>
                     <ActivityIndicator size="large" color={colors.primary} />
@@ -724,7 +737,7 @@ export default function ProfileScreen() {
                   <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Aucun avis pour le moment</Text>
                 ) : (
                   <View style={styles.reviewsList}>
-                    {reviews.map((review) => (
+                    {reviews.slice(0, 2).map((review) => (
                       <View key={review.id} style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                         <View style={styles.reviewHeader}>
                           {review.reviewer?.avatar_url ? (
@@ -1172,6 +1185,20 @@ const styles = StyleSheet.create({
   reviewsSection: {
     padding: 16,
     borderTopWidth: 1,
+  },
+  reviewsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  seeMoreButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  seeMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   reviewsList: {
     gap: 12,
