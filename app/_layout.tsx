@@ -91,6 +91,8 @@ function RootLayoutNav() {
       <Stack.Screen name="profile" options={{ animation: 'fade' }} />
       <Stack.Screen name="settings" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
       <Stack.Screen name="exchanges" options={{ animation: 'fade' }} />
+      <Stack.Screen name="exchange/[id]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
+      <Stack.Screen name="contract/[id]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
       <Stack.Screen name="admin" options={{ animation: 'fade' }} />
       <Stack.Screen name="user/[id]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
       <Stack.Screen name="+not-found" />

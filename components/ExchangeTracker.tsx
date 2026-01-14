@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, TextInput,
 import { X, Package, Truck, CheckCircle, Clock, AlertCircle, FileText } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
-import { ContractModal } from './ContractModal';
+import { useRouter } from 'expo-router';
 
 type ExchangeTrackerProps = {
   exchange: any;
@@ -21,12 +21,12 @@ const steps = [
 
 export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: ExchangeTrackerProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeLoading, setDisputeLoading] = useState(false);
-  const [showContractModal, setShowContractModal] = useState(false);
 
   const proposal = exchange.contract?.proposal;
   const isFromUser = proposal?.from_user_id === user?.id;
@@ -427,7 +427,10 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
               {exchange.contract && (
                 <TouchableOpacity
                   style={[styles.contractButton, { backgroundColor: '#F0F9FF', borderColor: '#0EA5E9' }]}
-                  onPress={() => setShowContractModal(true)}
+                  onPress={() => {
+                    onClose();
+                    router.push(`/contract/${exchange.contract.id}`);
+                  }}
                 >
                   <FileText size={20} color="#0EA5E9" />
                   <Text style={[styles.contractButtonText, { color: '#0EA5E9' }]}>
@@ -452,17 +455,6 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
         </View>
       </View>
 
-      {exchange.contract && (
-        <ContractModal
-          contract={exchange.contract}
-          visible={showContractModal}
-          onClose={() => setShowContractModal(false)}
-          onAccepted={() => {
-            setShowContractModal(false);
-            onUpdate();
-          }}
-        />
-      )}
     </Modal>
   );
 }

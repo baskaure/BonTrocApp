@@ -6,7 +6,6 @@ import { useTheme } from '@/lib/theme';
 import { supabase, Exchange } from '@/lib/supabase';
 import { BottomNav } from '@/components/BottomNav';
 import { Package, Clock, CheckCircle, XCircle, AlertCircle, Calendar } from 'lucide-react-native';
-import { ExchangeTracker } from '@/components/ExchangeTracker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type ExchangeWithDetails = Exchange & {
@@ -25,7 +24,6 @@ export default function ExchangesScreen() {
   const router = useRouter();
   const [exchanges, setExchanges] = useState<ExchangeWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedExchange, setSelectedExchange] = useState<ExchangeWithDetails | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -253,7 +251,12 @@ export default function ExchangesScreen() {
               <TouchableOpacity
                 key={exchange.id}
                 style={[styles.exchangeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                onPress={() => setSelectedExchange(exchange)}
+                onPress={() =>
+                  router.push({
+                    pathname: '/exchange/[id]',
+                    params: { id: exchange.id },
+                  })
+                }
               >
                 <View style={styles.exchangeHeader}>
                   <View style={styles.exchangeUser}>
@@ -303,15 +306,6 @@ export default function ExchangesScreen() {
       )}
 
       <BottomNav />
-
-      {selectedExchange && (
-        <ExchangeTracker
-          exchange={selectedExchange}
-          visible={true}
-          onClose={() => setSelectedExchange(null)}
-          onUpdate={loadExchanges}
-        />
-      )}
     </SafeAreaView>
   );
 }
