@@ -6,7 +6,7 @@ import { useTheme } from '@/lib/theme';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { BottomNav } from '@/components/BottomNav';
-import { ArrowLeft, Clock, Package, Truck, CheckCircle, AlertCircle, FileText } from 'lucide-react-native';
+import { ArrowLeft, Clock, Package, Truck, CheckCircle, AlertCircle, FileText, Star } from 'lucide-react-native';
 
 type ExchangeDetail = any;
 
@@ -31,6 +31,7 @@ export default function ExchangeDetailScreen() {
   const [disputeLoading, setDisputeLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState(false);
   const hasLoadedRef = useRef(false);
 
   const loadExchange = useCallback(async (silent = false) => {
@@ -78,6 +79,20 @@ export default function ExchangeDetailScreen() {
           .eq('type', 'exchange_update')
           .eq('related_id', data.id)
           .is('read_at', null);
+
+        // Vérifier si l'utilisateur a déjà laissé un avis pour cet échange
+        if (data.status === 'confirmed') {
+          const { data: existingReview } = await supabase
+            .from('reviews')
+            .select('id')
+            .eq('exchange_id', data.id)
+            .eq('reviewer_id', user.id)
+            .single();
+
+          setHasReviewed(!!existingReview);
+        } else {
+          setHasReviewed(false);
+        }
       }
     } catch (err: any) {
       console.error('Error loading exchange:', err);
@@ -470,6 +485,29 @@ export default function ExchangeDetailScreen() {
             </TouchableOpacity>
           )}
 
+          {/* Bouton pour laisser un avis quand l'échange est confirmé */}
+          {exchange.status === 'confirmed' && !hasReviewed && (
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: colors.secondary }]}
+              onPress={() => {
+                // @ts-ignore - Route dynamique
+                router.push(`/review/${exchange.id}`);
+              }}
+            >
+              <Star size={20} color="#FFF" />
+              <Text style={styles.actionButtonText}>Laisser un avis</Text>
+            </TouchableOpacity>
+          )}
+
+          {exchange.status === 'confirmed' && hasReviewed && (
+            <View style={[styles.infoBox, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
+              <CheckCircle size={20} color={colors.success} />
+              <Text style={[styles.infoText, { color: colors.success }]}>
+                Vous avez déjà laissé un avis pour cet échange
+              </Text>
+            </View>
+          )}
+
           {exchange.dispute && (
             <View
               style={[
@@ -600,9 +638,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     padding: 14,
     borderRadius: 14,
-    alignItems: 'center',
   },
   actionButtonText: {
     color: '#FFF',
@@ -685,6 +726,20 @@ const styles = StyleSheet.create({
   disputeInfoText: {
     fontSize: 14,
     marginTop: 2,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

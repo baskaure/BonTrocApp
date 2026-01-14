@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Keyboard } from 'react-native';
 import { X, Star, CheckCircle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
@@ -199,6 +199,9 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
                 value={comment}
                 onChangeText={setComment}
                 placeholderTextColor="#999"
+                returnKeyType="default"
+                blurOnSubmit={true}
+                textAlignVertical="top"
               />
               <Text style={styles.hint}>
                 Votre avis sera visible publiquement sur le profil de {revieweeName}
@@ -338,6 +341,7 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: 'top',
     marginBottom: 8,
+    color: '#1E293B',
   },
   hint: {
     fontSize: 12,

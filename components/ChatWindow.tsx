@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
 import { Send, AlertTriangle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
@@ -240,11 +240,16 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
       <ScrollView
         ref={scrollViewRef}
         style={styles.messagesContainer}
         contentContainerStyle={styles.messagesContent}
+        keyboardShouldPersistTaps="handled"
       >
         {messages.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -305,10 +310,11 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
           multiline
           maxLength={500}
           returnKeyType="send"
-          blurOnSubmit={false}
+          blurOnSubmit={true}
           onSubmitEditing={() => {
             if (newMessage.trim() && !loading) {
               handleSend();
+            } else {
               Keyboard.dismiss();
             }
           }}
@@ -328,7 +334,7 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -417,6 +423,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 15,
     maxHeight: 100,
+    color: '#1E293B',
   },
   sendButton: {
     width: 44,
