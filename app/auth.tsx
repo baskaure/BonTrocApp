@@ -234,133 +234,101 @@ export default function AuthScreen() {
     isProcessingOAuth.current = false;
     
     try {
-      // Créer l'URL de redirection avec expo-auth-session
-      // Force l'utilisation du schéma de l'app (bontroc://) au lieu d'une URL web
-      const redirectUrl = makeRedirectUri({
-        scheme: 'bontroc',
-        path: 'auth/callback',
-      });
+      // Forcer l'utilisation du schéma de l'app (bontroc://) au lieu de exp://
+      // makeRedirectUri peut retourner exp:// en développement, on force bontroc://
+      const appRedirectUrl = 'bontroc://auth/callback';
       
-      // S'assurer que l'URL utilise bien le schéma de l'app et non HTTP/HTTPS
-      // Si makeRedirectUri retourne une URL web, on force l'utilisation du schéma de l'app
-      const appRedirectUrl = redirectUrl.startsWith('http') 
-        ? `bontroc://auth/callback` 
-        : redirectUrl;
+      console.log('App redirect URL:', appRedirectUrl);
       
-      console.log('OAuth redirect URL (original):', redirectUrl);
-      console.log('OAuth redirect URL (app):', appRedirectUrl);
+      // IMPORTANT: Configuration requise dans Supabase Dashboard
+      // 1. Allez dans Authentication > URL Configuration > Redirect URLs
+      // 2. Ajoutez l'URL exacte: bontroc://auth/callback
+      //
+      // IMPORTANT: Configuration requise dans Google Cloud Console
+      // 1. Allez dans APIs & Services > Credentials
+      // 2. Sélectionnez votre OAuth 2.0 Client ID (type Web)
+      // 3. Dans "Authorized redirect URIs", ajoutez:
+      //    https://[votre-projet].supabase.co/auth/v1/callback
+      //    (Remplacez [votre-projet] par votre ID de projet Supabase)
       
-      // IMPORTANT: Ajoutez cette URL EXACTE dans Supabase Dashboard
-      // Authentication > URL Configuration > Redirect URLs
-      // Format attendu: bontroc://auth/callback
-      // 
-      // Pour vérifier l'URL exacte, regardez dans la console lors de l'exécution
-      
+      // Utiliser skipBrowserRedirect: true pour gérer manuellement l'ouverture
+      // Cela permet de contrôler le flux et de rester dans l'app
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: appRedirectUrl,
-          skipBrowserRedirect: true, // On gère l'ouverture du navigateur manuellement
+          skipBrowserRedirect: true, // On gère l'ouverture manuellement
           queryParams: {
             access_type: 'offline',
-            prompt: 'consent', // Force l'affichage du consentement pour s'assurer que les tokens sont toujours demandés
+            prompt: 'consent',
           },
         },
       });
       
       if (error) {
         console.error('OAuth error:', error);
-        throw error;
+        Alert.alert(
+          'Erreur de configuration',
+          'Erreur OAuth: ' + error.message + '\n\nVérifiez que:\n' +
+          '1. Google OAuth est activé dans Supabase\n' +
+          '2. L\'URL de callback Supabase est dans Google Cloud Console\n' +
+          '3. L\'URL bontroc://auth/callback est dans Supabase Redirect URLs'
+        );
+        setGoogleLoading(false);
+        return;
       }
       
+      // Si Supabase retourne une URL, l'ouvrir dans le navigateur
       if (data?.url) {
-        console.log('Opening OAuth URL in browser...');
-        console.log('OAuth URL (original):', data.url);
+        console.log('Opening OAuth URL in browser:', data.url);
         
-        // Remplacer l'URL de redirection web par l'URL de l'app dans l'URL OAuth
-        // Supabase peut générer une URL avec redirect_uri pointant vers le site web
-        // On doit la remplacer par notre URL d'app
-        let oauthUrl = data.url;
-        
-        // Extraire et remplacer le paramètre redirect_uri
-        // Format attendu: redirect_uri=https://... ou redirect_uri=http://...
-        const redirectUriPattern = /redirect_uri=([^&]+)/;
-        const match = oauthUrl.match(redirectUriPattern);
-        
-        if (match) {
-          const currentRedirectUri = decodeURIComponent(match[1]);
-          console.log('Current redirect_uri in OAuth URL:', currentRedirectUri);
-          
-          // Si c'est une URL web, la remplacer par l'URL de l'app
-          if (currentRedirectUri.startsWith('http://') || currentRedirectUri.startsWith('https://')) {
-            oauthUrl = oauthUrl.replace(
-              redirectUriPattern,
-              `redirect_uri=${encodeURIComponent(appRedirectUrl)}`
-            );
-            console.log('OAuth URL (modified - web URL replaced):', oauthUrl);
-          } else {
-            console.log('Redirect URI is already an app URL, keeping it');
-          }
-        } else {
-          // Si pas de redirect_uri trouvé, l'ajouter
-          const separator = oauthUrl.includes('?') ? '&' : '?';
-          oauthUrl = `${oauthUrl}${separator}redirect_uri=${encodeURIComponent(appRedirectUrl)}`;
-          console.log('OAuth URL (with redirect_uri added):', oauthUrl);
-        }
-        
-        // Ouvrir le navigateur pour l'authentification
-        // Utiliser openAuthSessionAsync pour gérer correctement le retour vers l'app
-        // Cette méthode attend que l'URL de redirection soit appelée
+        // Utiliser openAuthSessionAsync pour ouvrir dans un navigateur in-app
+        // qui peut rediriger vers notre deep link bontroc://
         const result = await WebBrowser.openAuthSessionAsync(
-          oauthUrl,
+          data.url,
           appRedirectUrl
         );
         
-        console.log('Browser result type:', result.type);
+        console.log('OAuth result type:', result.type);
         
         // Traiter le résultat
-        if (result.type === 'success') {
-          // Type guard pour vérifier que result a une propriété url
-          const successResult = result as { type: 'success'; url: string };
-          if (successResult.url) {
-            console.log('Got result URL, processing...', successResult.url);
-            await handleOAuthUrl(successResult.url);
+        if (result.type === 'success' && 'url' in result) {
+          const resultUrl = result.url as string;
+          console.log('OAuth callback URL received:', resultUrl);
+          
+          // Vérifier si c'est notre deep link ou une URL Supabase
+          if (resultUrl.startsWith('bontroc://') || resultUrl.includes('auth/callback')) {
+            await handleOAuthUrl(resultUrl);
           } else {
-            console.log('Success but no URL in result');
-            setGoogleLoading(false);
-            isProcessingOAuth.current = false;
+            // Si c'est une URL Supabase, elle devrait contenir les tokens
+            // ou rediriger vers notre deep link
+            console.log('Processing Supabase callback URL');
+            await handleOAuthUrl(resultUrl);
           }
         } else if (result.type === 'cancel' || result.type === 'dismiss') {
-          console.log('Browser dismissed or cancelled');
-          setGoogleLoading(false);
-          isProcessingOAuth.current = false;
-        } else if (result.type === 'locked') {
-          console.log('Browser locked');
+          console.log('User cancelled or dismissed OAuth');
           setGoogleLoading(false);
           isProcessingOAuth.current = false;
         } else {
-          console.log('Unexpected result type:', result.type);
-          // Vérifier si l'URL contient une erreur même avec un autre type
-          if ('url' in result && typeof result.url === 'string') {
-            const resultUrl = result.url as string;
-            if (resultUrl.includes('error=') || resultUrl.includes('access_denied')) {
-              await handleOAuthUrl(resultUrl);
-              return;
-            }
-          }
-          // Attendre un peu pour voir si un deep link arrive
+          console.log('Unexpected OAuth result, waiting for deep link...');
+          // Attendre un peu au cas où un deep link arrive via Linking
           setTimeout(() => {
             if (!isProcessingOAuth.current) {
+              console.log('No deep link received, stopping loading');
               setGoogleLoading(false);
             }
-          }, 2000);
+          }, 3000);
         }
       } else {
-        throw new Error('Aucune URL OAuth retournée');
+        throw new Error('Aucune URL OAuth retournée par Supabase');
       }
     } catch (err: any) {
       console.error('Google OAuth error:', err);
-      Alert.alert('Erreur', err.message || 'Erreur lors de la connexion Google');
+      Alert.alert(
+        'Erreur',
+        err.message || 'Erreur lors de la connexion Google.\n\n' +
+        'Vérifiez la configuration OAuth dans Supabase et Google Cloud Console.'
+      );
       setGoogleLoading(false);
       isProcessingOAuth.current = false;
     }

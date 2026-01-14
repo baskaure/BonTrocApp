@@ -21,30 +21,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        // Si le refresh token est invalide, nettoyer la session et continuer
-        if (error.message?.includes('Refresh Token') || 
-            error.message?.includes('session missing') ||
-            error.message?.includes('Invalid Refresh Token')) {
-          console.log('Session invalide, nettoyage en cours...');
-          supabase.auth.signOut().catch(() => {});
+    // Utiliser un try-catch pour mieux gérer les erreurs
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          // Si le refresh token est invalide, nettoyer la session et continuer silencieusement
+          if (error.message?.includes('Refresh Token') || 
+              error.message?.includes('session missing') ||
+              error.message?.includes('Invalid Refresh Token') ||
+              error.message?.includes('refresh_token_not_found')) {
+            // Nettoyer silencieusement sans logger l'erreur
+            try {
+              await supabase.auth.signOut();
+            } catch (signOutError) {
+              // Ignorer les erreurs de déconnexion si la session est déjà invalide
+            }
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+            return;
+          }
+          // Logger uniquement les autres erreurs
+          console.error('Erreur lors de la récupération de la session:', error);
+        }
+        
+        setSession(session);
+        if (session?.user) {
+          loadUserProfile(session.user.id);
+        } else {
+          setLoading(false);
+        }
+      } catch (err: any) {
+        // Gérer les exceptions non capturées
+        if (err?.message?.includes('Refresh Token') || 
+            err?.message?.includes('Invalid Refresh Token') ||
+            err?.message?.includes('refresh_token_not_found')) {
           setSession(null);
           setUser(null);
           setLoading(false);
           return;
         }
-        console.error('Erreur lors de la récupération de la session:', error);
-      }
-      setSession(session);
-      if (session?.user) {
-        loadUserProfile(session.user.id);
-      } else {
+        console.error('Exception lors de l\'initialisation de l\'auth:', err);
         setLoading(false);
       }
-    });
+    };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    initializeAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Gérer tous les événements d'authentification
       setSession(session);
       if (session?.user) {
         loadUserProfile(session.user.id);

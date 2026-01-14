@@ -1,3 +1,7 @@
+// Imports critiques - doivent être en premier
+import 'react-native-url-polyfill/auto';
+import 'react-native-gesture-handler';
+
 import { useEffect, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import * as Linking from 'expo-linking';
