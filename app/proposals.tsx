@@ -1,92 +1,40 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Image } from 'react-native';
-import { useRouter, usePathname } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
-import { supabase, Proposal } from '@/lib/supabase';
-import { BottomNav } from '@/components/BottomNav';
+import { Proposal } from '@/lib/supabase';
 import { MessageCircle, Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useProposals } from '@/lib/store/hooks';
+import { supabase } from '@/lib/supabase';
+import { PageHeader } from '@/components/PageHeader';
+import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
 export default function ProposalsScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [loading, setLoading] = useState(false); // Commencer à false pour éviter le flash
   const [filter, setFilter] = useState<'all' | 'sent' | 'received'>('all');
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [proposalsWithUnreadMessages, setProposalsWithUnreadMessages] = useState<Set<string>>(new Set());
-  const hasLoadedRef = useRef(false);
-  const pathname = usePathname();
-  const previousPathnameRef = useRef<string | null>(null);
+
+  // Utiliser le store pour charger les propositions
+  const { proposals, loading, error, refresh } = useProposals(user?.id || null, filter, { autoLoad: !!user });
+  
+  // Récupérer la hauteur dynamique du header (hauteur totale avec safe area)
+  const { pageHeaderTotalHeight } = useHeaderHeightStore();
 
   useEffect(() => {
     if (user) {
-      // Charger les propositions au montage ou changement d'utilisateur
-      if (!hasLoadedRef.current) {
-        // Première fois : charger avec loader seulement si on n'a pas de données
-        if (proposals.length === 0) {
-          setLoading(true);
-        }
-        loadProposals(proposals.length > 0); // Silent si on a déjà des données
-        loadUnreadMessages();
-        hasLoadedRef.current = true;
-      } else if (previousPathnameRef.current !== pathname && pathname === '/proposals') {
-        // On vient de naviguer vers cette page : recharger silencieusement (toujours silent)
-        loadProposals(true);
-        loadUnreadMessages();
-      }
-      previousPathnameRef.current = pathname;
+      loadUnreadMessages();
     }
-  }, [user, pathname]);
+  }, [user]);
 
   useEffect(() => {
-    if (user && hasLoadedRef.current) {
-      // Charger silencieusement lors du changement de filtre (pas de loader)
-      loadProposals(true);
+    if (user) {
+      loadUnreadMessages();
     }
-  }, [filter]);
-
-  async function loadProposals(silent = false) {
-    if (!user) return;
-
-    // Ne jamais afficher le loader si on a déjà des données (évite le flash)
-    if (!silent && !refreshing && proposals.length === 0) {
-      setLoading(true);
-    }
-    setError(null);
-    try {
-      let query = supabase
-        .from('proposals')
-        .select(`
-          *,
-          from_user:users!proposals_from_user_id_fkey(*),
-          to_user:users!proposals_to_user_id_fkey(*),
-          listing:listings(*)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (filter === 'sent') {
-        query = query.eq('from_user_id', user.id);
-      } else if (filter === 'received') {
-        query = query.eq('to_user_id', user.id);
-      } else {
-        query = query.or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setProposals(data || []);
-    } catch (error) {
-      console.error('Error loading proposals:', error);
-      setError('Impossible de charger les propositions. Réessayez plus tard.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }
+  }, [proposals]);
 
   async function loadUnreadMessages() {
     if (!user) return;
@@ -126,6 +74,13 @@ export default function ProposalsScreen() {
     }
   }
 
+  const handleRefresh = () => {
+    setRefreshing(true);
+    refresh();
+    loadUnreadMessages();
+    setTimeout(() => setRefreshing(false), 500);
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'accepted':
@@ -153,8 +108,7 @@ export default function ProposalsScreen() {
   const { colors } = useTheme();
 
   // Ne jamais afficher le loader si on a déjà des données (évite le flash lors de la navigation)
-  // Le loader ne s'affiche que lors du premier chargement (quand proposals.length === 0)
-  if (loading && proposals.length === 0 && hasLoadedRef.current === false) {
+  if (loading && proposals.length === 0) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <View style={styles.centerContainer}>
@@ -165,18 +119,17 @@ export default function ProposalsScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Mes propositions</Text>
-      </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+      <PageHeader title="Mes propositions" />
 
-      {error && (
-        <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
-          <Text style={{ color: colors.error }}>{error}</Text>
-        </View>
-      )}
+      <View style={[styles.contentWrapper, { marginTop: pageHeaderTotalHeight }]}>
+        {error && (
+          <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
+            <Text style={{ color: colors.error }}>{error.message}</Text>
+          </View>
+        )}
 
-      <View style={[styles.filterTabs, { borderBottomColor: colors.border }]}>
+        <View style={[styles.filterTabs, { borderBottomColor: colors.border }]}>
         {['all', 'sent', 'received'].map((filterType) => (
           <TouchableOpacity
             key={filterType}
@@ -192,15 +145,14 @@ export default function ProposalsScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: 16 } // Espace après les filtres
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              loadProposals();
-              loadUnreadMessages();
-            }}
+            onRefresh={handleRefresh}
             tintColor={colors.textSecondary}
             colors={[colors.primary]}
           />
@@ -285,8 +237,7 @@ export default function ProposalsScreen() {
           </View>
         )}
       </ScrollView>
-
-      <BottomNav />
+      </View>
     </SafeAreaView>
   );
 }
@@ -299,14 +250,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  header: {
-    padding: 16,
-    paddingTop: 48,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
   },
   filterTabs: {
     flexDirection: 'row',
@@ -324,12 +267,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  contentWrapper: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 16,
+    paddingBottom: 100, // Espace pour la bottom bar fixe
   },
   errorBox: {
     marginHorizontal: 16,

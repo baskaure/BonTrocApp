@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
+import { useUnreadCount } from '@/lib/store/hooks';
 
 type NotificationBellProps = {
   onPress?: () => void;
@@ -14,38 +15,13 @@ export function NotificationBell({ onPress }: NotificationBellProps) {
   const { user } = useAuth();
   const router = useRouter();
   const { colors } = useTheme();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { count: unreadCount, refresh } = useUnreadCount(user?.id || null, { autoLoad: !!user });
 
   useEffect(() => {
     if (user) {
-      loadUnreadCount();
       subscribeToNotifications();
     }
   }, [user]);
-
-  async function loadUnreadCount() {
-    if (!user) return;
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('id')
-        .eq('user_id', user.id)
-        .is('read_at', null);
-
-      if (error) {
-        if (error.code === 'PGRST205') {
-          setUnreadCount(0);
-        } else {
-          console.error('Error loading unread count:', error);
-        }
-      } else if (data) {
-        setUnreadCount(data.length);
-      }
-    } catch (error) {
-      console.error('Error loading unread count:', error);
-      setUnreadCount(0);
-    }
-  }
 
   function subscribeToNotifications() {
     if (!user) return;
@@ -58,7 +34,7 @@ export function NotificationBell({ onPress }: NotificationBellProps) {
         table: 'notifications',
         filter: `user_id=eq.${user.id}`,
       }, () => {
-        loadUnreadCount();
+        refresh();
       })
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -66,7 +42,7 @@ export function NotificationBell({ onPress }: NotificationBellProps) {
         table: 'notifications',
         filter: `user_id=eq.${user.id}`,
       }, () => {
-        loadUnreadCount();
+        refresh();
       })
       .subscribe();
 

@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { supabase, Exchange } from '@/lib/supabase';
-import { BottomNav } from '@/components/BottomNav';
 import { Package, Clock, CheckCircle, XCircle, AlertCircle, Calendar } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useExchanges } from '@/lib/store/hooks';
+import { PageHeader } from '@/components/PageHeader';
+import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
 type ExchangeWithDetails = Exchange & {
   contract?: {
@@ -22,94 +24,64 @@ type ExchangeWithDetails = Exchange & {
 export default function ExchangesScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const [exchanges, setExchanges] = useState<ExchangeWithDetails[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      loadExchanges();
-    }
-  }, [user]);
+  // Utiliser le store pour charger les échanges
+  const { exchanges: rawExchanges, loading, refresh } = useExchanges(user?.id || null, { autoLoad: !!user });
+  
+  // Récupérer la hauteur dynamique du header (hauteur totale avec safe area)
+  const { pageHeaderTotalHeight } = useHeaderHeightStore();
+
+  // Convertir en ExchangeWithDetails et filtrer par statut
+  const exchanges = useMemo(() => {
+    const filtered = rawExchanges.filter((ex: any) => {
+      if (filterStatus === 'all') return true;
+      return ex.status === filterStatus;
+    }) as ExchangeWithDetails[];
+    return filtered;
+  }, [rawExchanges, filterStatus]);
 
   useEffect(() => {
     if (user) {
-      // Charger silencieusement lors du changement de filtre (pas de loader)
-      loadExchanges(true);
-    }
-  }, [filterStatus]);
-
-  async function loadExchanges(silent = false) {
-    if (!user) return;
-
-    if (!silent && !refreshing) setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('exchanges')
-        .select(`
-          *,
-          dispute:disputes(*),
-          contract:contracts(
-            *,
-            proposal:proposals(
-              *,
-              from_user:users!proposals_from_user_id_fkey(display_name, avatar_url),
-              to_user:users!proposals_to_user_id_fkey(display_name, avatar_url),
-              listing:listings(title)
-            )
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const filtered = data?.filter((ex: any) => {
-        const proposal = ex.contract?.proposal;
-        if (!proposal) return false;
-        return proposal.from_user_id === user.id || proposal.to_user_id === user.id;
-      }) || [];
-
-      const normalized = filtered.map((ex: any) => ({
-        ...ex,
-        dispute: Array.isArray(ex.dispute) ? ex.dispute[0] : ex.dispute,
-      }));
-
-      setExchanges(normalized as ExchangeWithDetails[]);
-      
       // Marquer les notifications d'échanges comme lues
-      if (user) {
-        try {
-          const { data: updated, error: updateError } = await supabase
-            .from('notifications')
-            .update({ read_at: new Date().toISOString() })
-            .eq('user_id', user.id)
-            .eq('type', 'exchange_update')
-            .is('read_at', null)
-            .select();
-          
-          if (updateError) {
-            // Si la table n'existe pas, on ignore silencieusement
-            if (updateError.code !== 'PGRST205') {
-              console.error('Error marking exchange notifications as read:', updateError);
-            }
-          } else if (updated && updated.length > 0) {
-            console.log(`Marked ${updated.length} exchange notifications as read`);
-          }
-        } catch (err: any) {
-          // Ignorer les erreurs si la table n'existe pas
-          if (err?.code !== 'PGRST205') {
-            console.error('Error in mark exchange notifications as read:', err);
-          }
+      markExchangeNotificationsAsRead();
+    }
+  }, [user, exchanges]);
+
+  async function markExchangeNotificationsAsRead() {
+    if (!user) return;
+    
+    try {
+      const { data: updated, error: updateError } = await supabase
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .eq('type', 'exchange_update')
+        .is('read_at', null)
+        .select();
+      
+      if (updateError) {
+        // Si la table n'existe pas, on ignore silencieusement
+        if (updateError.code !== 'PGRST205') {
+          console.error('Error marking exchange notifications as read:', updateError);
         }
+      } else if (updated && updated.length > 0) {
+        console.log(`Marked ${updated.length} exchange notifications as read`);
       }
-    } catch (error) {
-      console.error('Error loading exchanges:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    } catch (err: any) {
+      // Ignorer les erreurs si la table n'existe pas
+      if (err?.code !== 'PGRST205') {
+        console.error('Error in mark exchange notifications as read:', err);
+      }
     }
   }
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    refresh();
+    setTimeout(() => setRefreshing(false), 500);
+  };
 
   const { colors } = useTheme();
 
@@ -162,9 +134,6 @@ export default function ExchangesScreen() {
     return proposal.from_user;
   };
 
-  const filteredExchanges = filterStatus === 'all'
-    ? exchanges
-    : exchanges.filter(ex => ex.status === filterStatus);
 
   if (!user) {
     return (
@@ -175,18 +144,16 @@ export default function ExchangesScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Mes échanges</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Suivez l'état de vos échanges</Text>
-      </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+      <PageHeader title="Mes échanges" />
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={styles.filterContainer}
-      >
+      <View style={[styles.contentWrapper, { marginTop: pageHeaderTotalHeight }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroll}
+          contentContainerStyle={styles.filterContainer}
+        >
         {['all', 'in_progress', 'delivered', 'confirmed'].map((status) => (
           <TouchableOpacity
             key={status}
@@ -211,13 +178,13 @@ export default function ExchangesScreen() {
             </Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+        </ScrollView>
 
-      {loading ? (
+        {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      ) : filteredExchanges.length === 0 ? (
+      ) : exchanges.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Package size={64} color={colors.border} />
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
@@ -229,20 +196,23 @@ export default function ExchangesScreen() {
       ) : (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 }]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { 
+              paddingTop: 12, // Espace après les filtres
+              paddingBottom: 120 
+            }
+          ]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                loadExchanges();
-              }}
+              onRefresh={handleRefresh}
               tintColor={colors.textSecondary}
               colors={[colors.primary]}
             />
           }
         >
-          {filteredExchanges.map((exchange) => {
+          {exchanges.map((exchange) => {
             const otherParty = getOtherParty(exchange);
             const proposal = exchange.contract?.proposal;
             const listing = proposal?.listing;
@@ -303,9 +273,8 @@ export default function ExchangesScreen() {
             );
           })}
         </ScrollView>
-      )}
-
-      <BottomNav />
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -331,8 +300,12 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
   },
+  contentWrapper: {
+    flex: 1,
+  },
   filterScroll: {
     maxHeight: 60,
+    paddingVertical: 12,
   },
   filterContainer: {
     paddingHorizontal: 16,

@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/lib/theme';
-import { supabase, User, Listing, Review } from '@/lib/supabase';
-import { ArrowLeft, MapPin, Calendar, Star } from 'lucide-react-native';
+import { Listing, Review } from '@/lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BottomNav } from '@/components/BottomNav';
+import { useUser, useReviews } from '@/lib/store/hooks';
+import { supabase } from '@/lib/supabase';
+import { PublicProfileHeader } from '@/components/PublicProfileHeader';
+import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
 type ReviewWithReviewer = Review & {
   reviewer?: { display_name: string; avatar_url?: string };
@@ -15,28 +17,26 @@ export default function PublicProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
-  const [user, setUser] = useState<User | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
-  const [reviews, setReviews] = useState<ReviewWithReviewer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [listingsLoading, setListingsLoading] = useState(false);
+
+  // Utiliser le store pour charger l'utilisateur et les reviews
+  const { user, loading: userLoading } = useUser(id || null, { autoLoad: !!id });
+  const { reviews, loading: reviewsLoading } = useReviews(id || null, { autoLoad: !!id });
+  
+  // Récupérer la hauteur dynamique du header (hauteur totale avec safe area)
+  const { publicProfileHeaderTotalHeight } = useHeaderHeightStore();
 
   useEffect(() => {
     if (id) {
-      loadProfile();
+      loadListings();
     }
   }, [id]);
 
-  async function loadProfile() {
-    setLoading(true);
+  async function loadListings() {
+    if (!id) return;
+    setListingsLoading(true);
     try {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (userData) setUser(userData);
-
       const { data: listingsData } = await supabase
         .from('listings')
         .select(`*, media:listing_media(*)`)
@@ -45,23 +45,14 @@ export default function PublicProfileScreen() {
         .order('created_at', { ascending: false });
 
       if (listingsData) setListings(listingsData);
-
-      const { data: reviewsData } = await supabase
-        .from('reviews')
-        .select(`
-          *,
-          reviewer:users!reviews_reviewer_id_fkey(display_name, avatar_url)
-        `)
-        .eq('reviewee_id', id)
-        .order('created_at', { ascending: false });
-
-      if (reviewsData) setReviews(reviewsData);
     } catch (err) {
-      console.error('Error loading profile:', err);
+      console.error('Error loading listings:', err);
     } finally {
-      setLoading(false);
+      setListingsLoading(false);
     }
   }
+
+  const loading = userLoading || reviewsLoading || listingsLoading;
 
   if (loading) {
     return (
@@ -85,121 +76,17 @@ export default function PublicProfileScreen() {
     );
   }
 
-  const avgRating = reviews.length > 0
-    ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
-    : null;
-  const hasBanner = !!user.banner_url;
-
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <ArrowLeft size={20} color={colors.textSecondary} />
-        <Text style={[styles.backButtonText, { color: colors.textSecondary }]}>Retour</Text>
-      </TouchableOpacity>
-
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {user.banner_url ? (
-            <Image source={{ uri: user.banner_url }} style={styles.banner} />
-          ) : (
-            <View style={[styles.bannerPlaceholder, { backgroundColor: colors.primary }]} />
-          )}
-
-          <View style={styles.profileContent}>
-            <View style={styles.profileHeader}>
-              {user.avatar_url ? (
-                <Image source={{ uri: user.avatar_url }} style={[styles.avatar, { borderColor: colors.surface, marginTop: hasBanner ? -48 : 0 }]} />
-              ) : (
-                <View style={[styles.avatarPlaceholder, { borderColor: colors.surface, marginTop: hasBanner ? -48 : 0 }]}>
-                  <Text style={[styles.avatarText, { color: colors.text }]}>
-                    {user.display_name[0]?.toUpperCase() || 'U'}
-                  </Text>
-                </View>
-              )}
-              <View style={styles.profileInfo}>
-                <Text style={[styles.name, { color: colors.text }]}>{user.display_name}</Text>
-                <Text style={[styles.username, { color: colors.textSecondary }]}>@{user.username}</Text>
-                {reviews.length > 0 && avgRating && (
-                  <View style={styles.rating}>
-                    <Star size={16} color={colors.secondary} fill={colors.secondary} />
-                    <Text style={[styles.ratingText, { color: colors.textSecondary }]}>
-                      {avgRating} · {reviews.length} avis
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-
-            {user.bio && (
-              <Text style={[styles.bio, { color: colors.text }]}>{user.bio}</Text>
-            )}
-
-            <View style={styles.infoRow}>
-              {(user.city || user.country) && (
-                <View style={styles.infoItem}>
-                  <MapPin size={16} color={colors.textSecondary} />
-                  <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                    {[user.city, user.country].filter(Boolean).join(', ')}
-                  </Text>
-                </View>
-              )}
-              <View style={styles.infoItem}>
-                <Calendar size={16} color={colors.textSecondary} />
-                <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                  Membre depuis {new Date(user.created_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
-                </Text>
-              </View>
-            </View>
-
-            {user.languages && user.languages.length > 0 && (
-              <View style={styles.tagsSection}>
-                <Text style={[styles.tagsLabel, { color: colors.textSecondary }]}>Langues</Text>
-                <View style={styles.tags}>
-                  {user.languages.map((lang) => (
-                    <View key={lang} style={[styles.tag, { backgroundColor: colors.primaryLight }]}>
-                      <Text style={[styles.tagText, { color: colors.primary }]}>{lang}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {user.skills && user.skills.length > 0 && (
-              <View style={styles.tagsSection}>
-                <Text style={[styles.tagsLabel, { color: colors.textSecondary }]}>Compétences</Text>
-                <View style={styles.tags}>
-                  {user.skills.map((skill) => (
-                    <View key={skill} style={[styles.tag, { backgroundColor: colors.successLight }]}>
-                      <Text style={[styles.tagText, { color: colors.success }]}>{skill}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            <View style={[styles.stats, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
-              <View style={styles.stat}>
-                <Text style={[styles.statValue, { color: colors.primary }]}>{listings.length}</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Annonces</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={[styles.statValue, { color: colors.primary }]}>{reviews.length || '-'}</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Avis</Text>
-              </View>
-              <View style={styles.stat}>
-                {avgRating ? (
-                  <View style={styles.statRating}>
-                    <Star size={20} color="#F59E0B" fill="#F59E0B" />
-                    <Text style={[styles.statValue, { color: colors.primary }]}>{avgRating}</Text>
-                  </View>
-                ) : (
-                  <Text style={[styles.statValue, { color: colors.primary }]}>-</Text>
-                )}
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Note</Text>
-              </View>
-            </View>
-
-            {listings.length > 0 && (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+      <PublicProfileHeader user={user} reviews={reviews} listingsCount={listings.length} />
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: publicProfileHeaderTotalHeight + 16 } // Hauteur totale du header (safe area + header) + espace
+        ]}
+      >
+        {listings.length > 0 && (
               <View style={styles.listingsSection}>
                 <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
                   Annonces de {user.display_name} ({listings.length})
@@ -302,11 +189,7 @@ export default function PublicProfileScreen() {
                 </View>
               )}
             </View>
-          </View>
-        </View>
       </ScrollView>
-
-      <BottomNav />
     </SafeAreaView>
   );
 }
@@ -335,7 +218,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 100, // Espace pour la bottom bar fixe
   },
   profileCard: {
     borderRadius: 24,

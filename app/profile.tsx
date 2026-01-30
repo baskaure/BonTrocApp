@@ -3,12 +3,12 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { supabase, Review } from '@/lib/supabase';
-import { BottomNav } from '@/components/BottomNav';
 import { Settings, LogOut, Star, Edit2, X, Check, Mail, Phone, MapPin, Calendar, Shield, Camera, ImageUp, Loader2, CheckCircle, Clock, XCircle } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useReviews } from '@/lib/store/hooks';
 
 type ReviewWithReviewer = Review & {
   reviewer?: { display_name: string; avatar_url?: string };
@@ -21,8 +21,6 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [reviews, setReviews] = useState<ReviewWithReviewer[]>([]);
-  const [reviewsLoading, setReviewsLoading] = useState(false);
   const [listingsCount, setListingsCount] = useState(0);
   const [mediaUploading, setMediaUploading] = useState({ avatar: false, banner: false });
   const [formData, setFormData] = useState({
@@ -41,6 +39,9 @@ export default function ProfileScreen() {
   const [newSkill, setNewSkill] = useState('');
   const [newLanguage, setNewLanguage] = useState('');
 
+  // Utiliser le store pour charger les reviews
+  const { reviews, loading: reviewsLoading, refresh: refreshReviews } = useReviews(user?.id || null, { autoLoad: !!user });
+
   useEffect(() => {
     if (user) {
       setFormData({
@@ -56,7 +57,6 @@ export default function ProfileScreen() {
         avatar_url: user.avatar_url || '',
         banner_url: user.banner_url || '',
       });
-      loadReviews();
       loadListingsCount();
     }
   }, [user]);
@@ -75,27 +75,6 @@ export default function ProfileScreen() {
       }
     } catch (err) {
       console.error('Error loading listings count:', err);
-    }
-  }
-
-  async function loadReviews() {
-    if (!user) return;
-    setReviewsLoading(true);
-    try {
-      const { data } = await supabase
-        .from('reviews')
-        .select(`
-          *,
-          reviewer:users!reviews_reviewer_id_fkey(display_name, avatar_url)
-        `)
-        .eq('reviewee_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (data) setReviews(data);
-    } catch (err) {
-      console.error('Error loading reviews:', err);
-    } finally {
-      setReviewsLoading(false);
     }
   }
 
@@ -824,8 +803,6 @@ export default function ProfileScreen() {
           </View>
         </View>
       </ScrollView>
-
-      <BottomNav />
     </SafeAreaView>
   );
 }
@@ -840,7 +817,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingTop: 16,
-    paddingBottom: 16,
+    paddingBottom: 100, // Espace pour la bottom bar fixe
   },
   profileCard: {
     borderRadius: 24,

@@ -10,9 +10,17 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import * as SplashScreen from 'expo-splash-screen';
+import { BottomNav } from '@/components/BottomNav';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
 // Empêcher le splash screen natif de se masquer automatiquement
 SplashScreen.preventAutoHideAsync();
+
+// Wrapper pour la bottom nav - indépendant et persistant
+function BottomNavWrapper() {
+  return <BottomNav />;
+}
 
 function RootLayoutNav() {
   const { user, loading } = useAuth();
@@ -71,35 +79,50 @@ function RootLayoutNav() {
   }, [user, segments, pathname, isReady, loading, router]);
 
   return (
-    <Stack 
-      screenOptions={{ 
-        headerShown: false, 
-        animation: 'fade',
-        animationDuration: 150, // Transition rapide (150ms)
-      }} 
-      initialRouteName="(splash)"
-    >
-      <Stack.Screen name="(splash)" options={{ headerShown: false, animation: 'none' }} />
-      <Stack.Screen name="landing" options={{ animation: 'fade' }} />
-      <Stack.Screen name="index" options={{ animation: 'fade' }} />
-      <Stack.Screen name="auth" options={{ animation: 'fade' }} />
-      <Stack.Screen name="auth/callback" options={{ animation: 'none' }} />
-      <Stack.Screen name="proposals" options={{ animation: 'fade' }} />
-      <Stack.Screen name="proposal/[id]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
-      <Stack.Screen name="listing/[id]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
-      <Stack.Screen name="listing/create" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
-      <Stack.Screen name="profile" options={{ animation: 'fade' }} />
-      <Stack.Screen name="settings" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
-      <Stack.Screen name="exchanges" options={{ animation: 'fade' }} />
-      <Stack.Screen name="exchange/[id]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
-      <Stack.Screen name="contract/[id]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
-      <Stack.Screen name="admin" options={{ animation: 'fade' }} />
-      <Stack.Screen name="user/[id]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
-      <Stack.Screen name="reviews/[userId]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
-      <Stack.Screen name="review/[exchangeId]" options={{ animation: 'slide_from_right', animationDuration: 200 }} />
-      <Stack.Screen name="+not-found" />
-    </Stack>
+    <>
+      <Stack 
+        screenOptions={{ 
+          headerShown: false, 
+          animation: 'none', // Navigation instantanée sans animation
+        }} 
+        initialRouteName="(splash)"
+      >
+        <Stack.Screen name="(splash)" options={{ headerShown: false, animation: 'none' }} />
+        <Stack.Screen name="landing" options={{ animation: 'none' }} />
+        <Stack.Screen name="index" options={{ animation: 'none' }} />
+        <Stack.Screen name="auth" options={{ animation: 'none' }} />
+        <Stack.Screen name="auth/callback" options={{ animation: 'none' }} />
+        <Stack.Screen name="proposals" options={{ animation: 'none' }} />
+        <Stack.Screen name="proposal/[id]" options={{ animation: 'none' }} />
+        <Stack.Screen name="listing/[id]" options={{ animation: 'none' }} />
+        <Stack.Screen name="listing/create" options={{ animation: 'none' }} />
+        <Stack.Screen name="profile" options={{ animation: 'none' }} />
+        <Stack.Screen name="settings" options={{ animation: 'none' }} />
+        <Stack.Screen name="exchanges" options={{ animation: 'none' }} />
+        <Stack.Screen name="exchange/[id]" options={{ animation: 'none' }} />
+        <Stack.Screen name="contract/[id]" options={{ animation: 'none' }} />
+        <Stack.Screen name="admin" options={{ animation: 'none' }} />
+        <Stack.Screen name="user/[id]" options={{ animation: 'none' }} />
+        <Stack.Screen name="reviews/[userId]" options={{ animation: 'none' }} />
+        <Stack.Screen name="review/[exchangeId]" options={{ animation: 'none' }} />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+      <BottomNavWrapper />
+    </>
   );
+}
+
+// Composant pour initialiser la safe area une seule fois au démarrage
+function SafeAreaInitializer() {
+  const insets = useSafeAreaInsets();
+  const { initializeSafeArea } = useHeaderHeightStore();
+
+  useEffect(() => {
+    // Initialiser la safe area une seule fois au démarrage
+    initializeSafeArea(insets.top, insets.bottom);
+  }, [insets.top, insets.bottom, initializeSafeArea]);
+
+  return null;
 }
 
 export default function RootLayout() {
@@ -145,6 +168,7 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
+      <SafeAreaInitializer />
       <RootLayoutNav />
       <StatusBar style="auto" />
     </AuthProvider>

@@ -3,98 +3,55 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
-import { supabase, Listing, Category } from '@/lib/supabase';
 import { ListingCard } from '@/components/ListingCard';
-import { BottomNav } from '@/components/BottomNav';
 import { Filter } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NotificationBell } from '@/components/NotificationBell';
+import { useListings, useCategories } from '@/lib/store/hooks';
+import { PageHeader } from '@/components/PageHeader';
+import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
 export default function HomeScreen() {
   const { user, loading: authLoading } = useAuth();
   const { colors } = useTheme();
   const router = useRouter();
-  const [listings, setListings] = useState<Listing[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<'all' | 'service' | 'product'>('all');
   const [filterMode, setFilterMode] = useState<'all' | 'remote' | 'on_site' | 'both'>('all');
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  // Utiliser le store pour charger les listings et catégories
+  const { listings, loading, error: listingsError, refresh: refreshListings } = useListings({
+    type: filterType,
+    mode: filterMode,
+    category: filterCategory,
+    searchQuery,
+  }, { autoLoad: !!user && !authLoading });
+
+  const { categories } = useCategories({ autoLoad: !!user && !authLoading });
+  
+  // Récupérer la hauteur dynamique du header (hauteur totale avec safe area)
+  const { pageHeaderTotalHeight } = useHeaderHeightStore();
 
   useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        router.replace('/landing');
-      } else {
-        // Utilisateur connecté, charger les données
-        loadCategories();
-        loadListings();
-      }
+    if (!authLoading && !user) {
+      router.replace('/landing');
     }
   }, [authLoading, user]);
 
-  // Charger les listings quand les filtres changent (seulement si user est connecté)
-  // Chargement silencieux sans loader pour éviter les "sauts" d'écran
+  // Recharger silencieusement quand les filtres changent
   useEffect(() => {
     if (user && !authLoading) {
-      loadListings(true);
+      refreshListings();
     }
   }, [filterType, filterMode, filterCategory, searchQuery]);
 
-  async function loadCategories() {
-    const { data, error } = await supabase
-      .from('categories')
-      .select('*')
-      .order('sort_order');
-    if (!error && data) setCategories(data);
-  }
-
-  async function loadListings(silent = false) {
-    if (!silent && !refreshing) setLoading(true);
-    setError(null);
-    try {
-      let query = supabase
-        .from('listings')
-        .select(`
-          *,
-          user:users(*),
-          media:listing_media(*)
-        `)
-        .eq('status', 'published')
-        .order('created_at', { ascending: false });
-
-      if (filterType !== 'all') {
-        query = query.eq('type', filterType);
-      }
-
-      if (filterMode !== 'all') {
-        query = query.eq('mode', filterMode);
-      }
-
-      if (filterCategory) {
-        query = query.eq('category_id', filterCategory);
-      }
-
-      if (searchQuery) {
-        query = query.or(`title.ilike.%${searchQuery}%,description_offer.ilike.%${searchQuery}%`);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setListings(data || []);
-    } catch (error) {
-      console.error('Error loading listings:', error);
-      setError('Impossible de charger les annonces. Vérifiez votre connexion puis réessayez.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }
+  const handleRefresh = () => {
+    setRefreshing(true);
+    refreshListings();
+    setTimeout(() => setRefreshing(false), 500);
+  };
 
   if (authLoading) {
     return (
@@ -109,31 +66,25 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
+      <PageHeader
+        title="Annonces"
+        showNotificationBell
+        showCreateButton
+      />
+      <View style={[styles.contentWrapper, { marginTop: pageHeaderTotalHeight }]}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              loadListings();
-            }}
+            onRefresh={handleRefresh}
             tintColor={colors.textSecondary}
             colors={[colors.primary]}
           />
         }
       >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Annonces</Text>
-          <View style={styles.headerActions}>
-            <NotificationBell />
-            <TouchableOpacity onPress={() => router.push('/listing/create')} style={[styles.createButton, { backgroundColor: colors.primary }]}>
-              <Text style={styles.createButtonText}>+ Créer</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         <View style={styles.searchContainer}>
           <TextInput
@@ -208,7 +159,7 @@ export default function HomeScreen() {
           </View>
         ) : listings.length === 0 ? (
           <View style={styles.emptyContainer}>
-          {error && <Text style={[styles.emptyText, { color: colors.error }]}>{error}</Text>}
+          {listingsError && <Text style={[styles.emptyText, { color: colors.error }]}>{listingsError.message}</Text>}
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Aucune annonce trouvée</Text>
             <TouchableOpacity
               onPress={() => router.push('/listing/create')}
@@ -230,9 +181,7 @@ export default function HomeScreen() {
           </View>
         )}
       </ScrollView>
-
-      <BottomNav />
-
+      </View>
     </SafeAreaView>
   );
 }
@@ -246,37 +195,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  contentWrapper: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 14,
     paddingTop: 16,
-    paddingBottom: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  createButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  createButtonText: {
-    color: '#FFF',
-    fontWeight: '600',
+    paddingBottom: 100, // Espace pour la bottom bar fixe
   },
   searchContainer: {
     flexDirection: 'row',
