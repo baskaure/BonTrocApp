@@ -7,7 +7,6 @@ import { supabase, Exchange } from '@/lib/supabase';
 import { Package, Clock, CheckCircle, XCircle, AlertCircle, Calendar } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useExchanges } from '@/lib/store/hooks';
-import { PageHeader } from '@/components/PageHeader';
 import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
 type ExchangeWithDetails = Exchange & {
@@ -145,8 +144,6 @@ export default function ExchangesScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
-      <PageHeader title="Mes échanges" />
-
       <View style={[styles.contentWrapper, { marginTop: pageHeaderTotalHeight }]}>
         <ScrollView
           horizontal

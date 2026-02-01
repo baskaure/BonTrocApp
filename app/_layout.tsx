@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import * as SplashScreen from 'expo-splash-screen';
 import { BottomNav } from '@/components/BottomNav';
+import { AppHeader } from '@/components/AppHeader';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
@@ -80,6 +81,7 @@ function RootLayoutNav() {
 
   return (
     <>
+      <AppHeader />
       <Stack 
         screenOptions={{ 
           headerShown: false, 

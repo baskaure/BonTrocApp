@@ -7,7 +7,6 @@ import { ListingCard } from '@/components/ListingCard';
 import { Filter } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useListings, useCategories } from '@/lib/store/hooks';
-import { PageHeader } from '@/components/PageHeader';
 import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
 export default function HomeScreen() {
@@ -67,11 +66,6 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
-      <PageHeader
-        title="Annonces"
-        showNotificationBell
-        showCreateButton
-      />
       <View style={[styles.contentWrapper, { marginTop: pageHeaderTotalHeight }]}>
         <ScrollView
           style={styles.scrollView}

@@ -8,7 +8,6 @@ import { MessageCircle, Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-re
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProposals } from '@/lib/store/hooks';
 import { supabase } from '@/lib/supabase';
-import { PageHeader } from '@/components/PageHeader';
 import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
 export default function ProposalsScreen() {
@@ -120,8 +119,6 @@ export default function ProposalsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
-      <PageHeader title="Mes propositions" />
-
       <View style={[styles.contentWrapper, { marginTop: pageHeaderTotalHeight }]}>
         {error && (
           <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
