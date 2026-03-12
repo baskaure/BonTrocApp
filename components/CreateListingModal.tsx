@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
-import { X, Upload, Image as ImageIcon } from 'lucide-react-native';
+import { X, Upload } from 'lucide-react-native';
+import { FormInput } from '@/components/ui/FormInput';
+import { createListingSchema, CreateListingFormData } from '@/lib/validations/listing';
 import * as ImagePicker from 'expo-image-picker';
 
 type CreateListingModalProps = {
@@ -20,8 +24,16 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
   const [uploading, setUploading] = useState(false);
   const [images, setImages] = useState<string[]>([]);
 
-  const resetForm = () => {
-    setFormData({
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<CreateListingFormData>({
+    resolver: zodResolver(createListingSchema),
+    defaultValues: {
       type: 'service',
       title: '',
       description_offer: '',
@@ -29,7 +41,13 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
       mode: 'both',
       estimation_min: '',
       estimation_max: '',
-    });
+    },
+  });
+
+  const formValues = watch();
+
+  const resetForm = () => {
+    reset();
     setImages([]);
     setError('');
     setUploading(false);
@@ -39,16 +57,6 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
     resetForm();
     onClose();
   };
-
-  const [formData, setFormData] = useState({
-    type: 'service' as 'service' | 'product',
-    title: '',
-    description_offer: '',
-    desired_exchange_desc: '',
-    mode: 'both' as 'remote' | 'on_site' | 'both',
-    estimation_min: '',
-    estimation_max: '',
-  });
 
   const pickImage = async () => {
     if (images.length >= 5) {
@@ -113,7 +121,7 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
     setImages(images.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async () => {
+  const onSubmit = async (data: CreateListingFormData) => {
     if (!user) return;
 
     setError('');
@@ -124,13 +132,13 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
         .from('listings')
         .insert({
           user_id: user.id,
-          type: formData.type,
-          title: formData.title,
-          description_offer: formData.description_offer,
-          desired_exchange_desc: formData.desired_exchange_desc,
-          mode: formData.mode,
-          estimation_min: formData.estimation_min ? parseFloat(formData.estimation_min) : null,
-          estimation_max: formData.estimation_max ? parseFloat(formData.estimation_max) : null,
+          type: data.type,
+          title: data.title,
+          description_offer: data.description_offer,
+          desired_exchange_desc: data.desired_exchange_desc,
+          mode: data.mode,
+          estimation_min: data.estimation_min ? parseFloat(data.estimation_min) : null,
+          estimation_max: data.estimation_max ? parseFloat(data.estimation_max) : null,
           status: 'published',
           location_lat: user.geo_lat,
           location_lng: user.geo_lng,
@@ -158,15 +166,6 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
         }
       }
 
-      setFormData({
-        type: 'service',
-        title: '',
-        description_offer: '',
-        desired_exchange_desc: '',
-        mode: 'both',
-        estimation_min: '',
-        estimation_max: '',
-      });
       resetForm();
 
       onSuccess();
@@ -238,105 +237,86 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
             <View style={styles.section}>
               <Text style={[styles.label, { color: colors.textSecondary }]}>Type d'annonce</Text>
               <View style={styles.radioGroup}>
-                <TouchableOpacity
-                  style={[
-                    styles.radioButton,
-                    { borderColor: colors.border },
-                    formData.type === 'service' && { borderColor: colors.primary, backgroundColor: colors.primaryLight }
-                  ]}
-                  onPress={() => setFormData({ ...formData, type: 'service' })}
-                >
-                  <Text style={[
-                    styles.radioText,
-                    { color: colors.textSecondary },
-                    formData.type === 'service' && { color: colors.primary }
-                  ]}>
-                    Service
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.radioButton,
-                    { borderColor: colors.border },
-                    formData.type === 'product' && { borderColor: colors.primary, backgroundColor: colors.primaryLight }
-                  ]}
-                  onPress={() => setFormData({ ...formData, type: 'product' })}
-                >
-                  <Text style={[
-                    styles.radioText,
-                    { color: colors.textSecondary },
-                    formData.type === 'product' && { color: colors.primary }
-                  ]}>
-                    Produit
-                  </Text>
-                </TouchableOpacity>
+                {(['service', 'product'] as const).map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.radioButton,
+                      { borderColor: colors.border },
+                      formValues.type === type && { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+                    ]}
+                    onPress={() => setValue('type', type)}
+                  >
+                    <Text
+                      style={[
+                        styles.radioText,
+                        { color: colors.textSecondary },
+                        formValues.type === type && { color: colors.primary },
+                      ]}
+                    >
+                      {type === 'service' ? 'Service' : 'Produit'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
 
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Titre de l'annonce</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                value={formData.title}
-                onChangeText={(text) => setFormData({ ...formData, title: text })}
-                placeholder="Ex: Cours de guitare débutant"
-                placeholderTextColor={colors.textTertiary}
-              />
-            </View>
+            <FormInput
+              control={control}
+              name="title"
+              label="Titre de l'annonce"
+              error={errors.title}
+              inputProps={{ placeholder: 'Ex: Cours de guitare débutant' }}
+            />
 
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Ce que vous offrez</Text>
-              <TextInput
-                style={[styles.input, styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                value={formData.description_offer}
-                onChangeText={(text) => setFormData({ ...formData, description_offer: text })}
-                placeholder="Décrivez en détail ce que vous proposez..."
-                placeholderTextColor={colors.textTertiary}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
+            <FormInput
+              control={control}
+              name="description_offer"
+              label="Ce que vous offrez"
+              error={errors.description_offer}
+              inputProps={{
+                placeholder: 'Décrivez en détail ce que vous proposez...',
+                multiline: true,
+                numberOfLines: 4,
+                textAlignVertical: 'top',
+                style: { minHeight: 100 },
+              }}
+            />
 
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Ce que vous recherchez en échange</Text>
-              <TextInput
-                style={[styles.input, styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                value={formData.desired_exchange_desc}
-                onChangeText={(text) => setFormData({ ...formData, desired_exchange_desc: text })}
-                placeholder="Décrivez ce que vous aimeriez recevoir en échange..."
-                placeholderTextColor={colors.textTertiary}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
+            <FormInput
+              control={control}
+              name="desired_exchange_desc"
+              label="Ce que vous recherchez en échange"
+              error={errors.desired_exchange_desc}
+              inputProps={{
+                placeholder: 'Décrivez ce que vous aimeriez recevoir en échange...',
+                multiline: true,
+                numberOfLines: 4,
+                textAlignVertical: 'top',
+                style: { minHeight: 100 },
+              }}
+            />
 
             <View style={styles.section}>
               <Text style={[styles.label, { color: colors.textSecondary }]}>Mode d'échange</Text>
-              <View style={[styles.selectContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                <Text style={[styles.selectText, { color: colors.text }]}>
-                  {formData.mode === 'both' ? 'Présentiel et À distance' : 
-                   formData.mode === 'on_site' ? 'Présentiel uniquement' : 
-                   'À distance uniquement'}
-                </Text>
-              </View>
               <View style={styles.modeButtons}>
-                {['both', 'on_site', 'remote'].map((mode) => (
+                {(['both', 'on_site', 'remote'] as const).map((mode) => (
                   <TouchableOpacity
                     key={mode}
                     style={[
                       styles.modeButton,
                       { borderColor: colors.border, backgroundColor: colors.surface },
-                      formData.mode === mode && { borderColor: colors.primary, backgroundColor: colors.primaryLight }
+                      formValues.mode === mode && { borderColor: colors.primary, backgroundColor: colors.primaryLight },
                     ]}
-                    onPress={() => setFormData({ ...formData, mode: mode as any })}
+                    onPress={() => setValue('mode', mode)}
                   >
-                    <Text style={[
-                      styles.modeButtonText,
-                      { color: colors.textSecondary },
-                      formData.mode === mode && { color: colors.primary, fontWeight: '600' }
-                    ]}>
+                    <Text
+                      style={[
+                        styles.modeButtonText,
+                        { color: colors.textSecondary },
+                        formValues.mode === mode && { color: colors.primary, fontWeight: '600' },
+                      ]}
+                    >
                       {mode === 'both' ? 'Les deux' : mode === 'on_site' ? 'Présentiel' : 'Distance'}
                     </Text>
                   </TouchableOpacity>
@@ -360,8 +340,8 @@ export function CreateListingModal({ visible, onClose, onSuccess }: CreateListin
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.submitButton, { backgroundColor: colors.primary }, loading && styles.submitButtonDisabled]}
-              onPress={handleSubmit}
-              disabled={loading || !formData.title || !formData.description_offer || !formData.desired_exchange_desc}
+              onPress={handleSubmit(onSubmit)}
+              disabled={loading || !formValues.title || !formValues.description_offer || !formValues.desired_exchange_desc}
             >
               {loading ? (
                 <ActivityIndicator color="#FFF" />

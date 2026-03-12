@@ -1,5 +1,7 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { supabase, Review } from '@/lib/supabase';
@@ -9,10 +11,10 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useReviews } from '@/lib/store/hooks';
+import { FormInput } from '@/components/ui/FormInput';
+import { FormTagInput } from '@/components/ui/FormTagInput';
+import { profileSchema, ProfileFormData } from '@/lib/validations/profile';
 
-type ReviewWithReviewer = Review & {
-  reviewer?: { display_name: string; avatar_url?: string };
-};
 
 export default function ProfileScreen() {
   const { user, signOut, refreshUser } = useAuth();
@@ -23,28 +25,38 @@ export default function ProfileScreen() {
   const [success, setSuccess] = useState('');
   const [listingsCount, setListingsCount] = useState(0);
   const [mediaUploading, setMediaUploading] = useState({ avatar: false, banner: false });
-  const [formData, setFormData] = useState({
-    display_name: '',
-    username: '',
-    bio: '',
-    phone: '',
-    city: '',
-    country: '',
-    languages: [] as string[],
-    skills: [] as string[],
-    search_radius_km: 50,
-    avatar_url: '',
-    banner_url: '',
+
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+  } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      display_name: '',
+      username: '',
+      bio: '',
+      phone: '',
+      city: '',
+      country: '',
+      languages: [],
+      skills: [],
+      search_radius_km: 50,
+      avatar_url: '',
+      banner_url: '',
+    },
   });
-  const [newSkill, setNewSkill] = useState('');
-  const [newLanguage, setNewLanguage] = useState('');
+
+  const formValues = watch();
 
   // Utiliser le store pour charger les reviews
   const { reviews, loading: reviewsLoading, refresh: refreshReviews } = useReviews(user?.id || null, { autoLoad: !!user });
 
   useEffect(() => {
     if (user) {
-      setFormData({
+      reset({
         display_name: user.display_name || '',
         username: user.username || '',
         bio: user.bio || '',
@@ -59,7 +71,7 @@ export default function ProfileScreen() {
       });
       loadListingsCount();
     }
-  }, [user]);
+  }, [user, reset]);
 
   async function loadListingsCount() {
     if (!user) return;
@@ -153,11 +165,7 @@ export default function ProfileScreen() {
       
       console.log('Image uploaded successfully:', imageUrl);
       
-      if (type === 'avatar') {
-        setFormData((prev) => ({ ...prev, avatar_url: imageUrl }));
-      } else {
-        setFormData((prev) => ({ ...prev, banner_url: imageUrl }));
-      }
+      setValue(type === 'avatar' ? 'avatar_url' : 'banner_url', imageUrl);
     } catch (err: any) {
       console.error('Upload error:', err);
       setError(err.message || 'Erreur lors du téléversement');
@@ -166,7 +174,7 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleSubmit = async () => {
+  const onSubmit = async (data: ProfileFormData) => {
     if (!user) return;
 
     setLoading(true);
@@ -177,17 +185,17 @@ export default function ProfileScreen() {
       const { error: updateError } = await supabase
         .from('users')
         .update({
-          display_name: formData.display_name,
-          username: formData.username,
-          bio: formData.bio,
-          phone: formData.phone,
-          city: formData.city,
-          country: formData.country,
-          languages: formData.languages,
-          skills: formData.skills,
-          search_radius_km: formData.search_radius_km,
-          avatar_url: formData.avatar_url,
-          banner_url: formData.banner_url,
+          display_name: data.display_name,
+          username: data.username,
+          bio: data.bio,
+          phone: data.phone,
+          city: data.city,
+          country: data.country,
+          languages: data.languages,
+          skills: data.skills,
+          search_radius_km: data.search_radius_km,
+          avatar_url: data.avatar_url,
+          banner_url: data.banner_url,
         })
         .eq('id', user.id);
 
@@ -238,9 +246,9 @@ export default function ProfileScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.profileCard}>
           <View style={styles.bannerContainer}>
-            {formData.banner_url ? (
+            {formValues.banner_url ? (
               <Image 
-                source={{ uri: formData.banner_url }} 
+                source={{ uri: formValues.banner_url }} 
                 style={styles.banner}
                 onError={(e) => {
                   console.error('Error loading banner image:', e.nativeEvent.error);
@@ -270,21 +278,20 @@ export default function ProfileScreen() {
 
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              {formData.avatar_url ? (
+              {formValues.avatar_url ? (
                 <Image 
-                  source={{ uri: formData.avatar_url }} 
+                  source={{ uri: formValues.avatar_url }} 
                   style={[styles.avatar, { borderColor: colors.surface }]}
                   onError={(e) => {
                     console.error('Error loading avatar image:', e.nativeEvent.error);
                     setError('Erreur lors du chargement de l\'avatar');
-                    // Réinitialiser l'URL en cas d'erreur
-                    setFormData((prev) => ({ ...prev, avatar_url: user.avatar_url || '' }));
+                    setValue('avatar_url', user.avatar_url || '');
                   }}
                 />
               ) : (
                 <View style={[styles.avatarPlaceholder, { borderColor: colors.surface }]}>
                   <Text style={styles.avatarText}>
-                    {formData.display_name[0]?.toUpperCase() || 'U'}
+                    {formValues.display_name[0]?.toUpperCase() || 'U'}
                   </Text>
                 </View>
               )}
@@ -306,8 +313,8 @@ export default function ProfileScreen() {
 
           <View style={styles.profileInfoSection}>
             <View style={styles.profileInfo}>
-              <Text style={[styles.name, { color: colors.text }]}>{formData.display_name}</Text>
-              <Text style={[styles.username, { color: colors.textSecondary }]}>@{formData.username}</Text>
+              <Text style={[styles.name, { color: colors.text }]}>{formValues.display_name}</Text>
+              <Text style={[styles.username, { color: colors.textSecondary }]}>@{formValues.username}</Text>
               {user.rating_count > 0 && (
                 <View style={styles.rating}>
                   <Star size={16} color={colors.secondary} fill={colors.secondary} />
@@ -331,7 +338,7 @@ export default function ProfileScreen() {
                 style={[styles.cancelEditButton, { borderColor: colors.border }]}
                 onPress={() => {
                   setIsEditing(false);
-                  setFormData({
+                  reset({
                     display_name: user.display_name || '',
                     username: user.username || '',
                     bio: user.bio || '',
@@ -367,181 +374,80 @@ export default function ProfileScreen() {
           {isEditing ? (
             <View style={styles.editForm}>
               <View style={styles.formRow}>
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Nom d'affichage *</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                    value={formData.display_name}
-                    onChangeText={(text) => setFormData({ ...formData, display_name: text })}
-                    placeholder="Votre nom"
-                    placeholderTextColor={colors.textTertiary}
-                  />
-                </View>
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Nom d'utilisateur *</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                    value={formData.username}
-                    onChangeText={(text) => setFormData({ ...formData, username: text })}
-                    placeholder="@username"
-                    placeholderTextColor={colors.textTertiary}
-                  />
-                </View>
+                <FormInput
+                  control={control}
+                  name="display_name"
+                  label="Nom d'affichage *"
+                  containerStyle={styles.formGroup}
+                  inputProps={{ placeholder: 'Votre nom' }}
+                />
+                <FormInput
+                  control={control}
+                  name="username"
+                  label="Nom d'utilisateur *"
+                  containerStyle={styles.formGroup}
+                  inputProps={{ placeholder: '@username', autoCapitalize: 'none' }}
+                />
               </View>
 
               <View style={styles.formRow}>
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Ville</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                    value={formData.city}
-                    onChangeText={(text) => setFormData({ ...formData, city: text })}
-                    placeholder="Ville"
-                    placeholderTextColor={colors.textTertiary}
-                  />
-                </View>
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Pays</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                    value={formData.country}
-                    onChangeText={(text) => setFormData({ ...formData, country: text })}
-                    placeholder="Pays"
-                    placeholderTextColor={colors.textTertiary}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Téléphone</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                  value={formData.phone}
-                  onChangeText={(text) => setFormData({ ...formData, phone: text })}
-                  placeholder="+33 6 12 34 56 78"
-                  placeholderTextColor={colors.textTertiary}
-                  keyboardType="phone-pad"
+                <FormInput
+                  control={control}
+                  name="city"
+                  label="Ville"
+                  containerStyle={styles.formGroup}
+                  inputProps={{ placeholder: 'Ville' }}
+                />
+                <FormInput
+                  control={control}
+                  name="country"
+                  label="Pays"
+                  containerStyle={styles.formGroup}
+                  inputProps={{ placeholder: 'Pays' }}
                 />
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Biographie</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                  multiline
-                  numberOfLines={4}
-                  value={formData.bio}
-                  onChangeText={(text) => setFormData({ ...formData, bio: text })}
-                  placeholder="Parlez-nous un peu de vous..."
-                  placeholderTextColor={colors.textTertiary}
-                />
-              </View>
+              <FormInput
+                control={control}
+                name="phone"
+                label="Téléphone"
+                inputProps={{
+                  placeholder: '+33 6 12 34 56 78',
+                  keyboardType: 'phone-pad',
+                }}
+              />
 
-              <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Langues parlées</Text>
-                <View style={styles.tags}>
-                  {formData.languages.map((lang) => (
-                    <View key={lang} style={[styles.tag, { backgroundColor: colors.primaryLight }]}>
-                      <Text style={[styles.tagText, { color: colors.primary }]}>{lang}</Text>
-                      <TouchableOpacity
-                        onPress={() => setFormData({
-                          ...formData,
-                          languages: formData.languages.filter(l => l !== lang)
-                        })}
-                      >
-                        <X size={14} color={colors.primary} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-                <View style={styles.addTagRow}>
-                  <TextInput
-                    style={[styles.addTagInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                    value={newLanguage}
-                    onChangeText={setNewLanguage}
-                    placeholder="Ajouter une langue"
-                    placeholderTextColor={colors.textTertiary}
-                    onSubmitEditing={() => {
-                      if (newLanguage.trim() && !formData.languages.includes(newLanguage.trim())) {
-                        setFormData({
-                          ...formData,
-                          languages: [...formData.languages, newLanguage.trim()]
-                        });
-                        setNewLanguage('');
-                      }
-                    }}
-                  />
-                  <TouchableOpacity
-                    style={styles.addTagButton}
-                    onPress={() => {
-                      if (newLanguage.trim() && !formData.languages.includes(newLanguage.trim())) {
-                        setFormData({
-                          ...formData,
-                          languages: [...formData.languages, newLanguage.trim()]
-                        });
-                        setNewLanguage('');
-                      }
-                    }}
-                  >
-                    <Text style={styles.addTagButtonText}>Ajouter</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <FormInput
+                control={control}
+                name="bio"
+                label="Biographie"
+                inputProps={{
+                  placeholder: 'Parlez-nous un peu de vous...',
+                  multiline: true,
+                  numberOfLines: 4,
+                  style: { minHeight: 100, textAlignVertical: 'top' },
+                }}
+              />
 
-              <View style={styles.formGroup}>
-                <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Compétences / Tags</Text>
-                <View style={styles.tags}>
-                  {formData.skills.map((skill) => (
-                    <View key={skill} style={[styles.tag, styles.skillTag, { backgroundColor: colors.successLight }]}>
-                      <Text style={[styles.tagText, styles.skillTagText, { color: colors.success }]}>{skill}</Text>
-                      <TouchableOpacity
-                        onPress={() => setFormData({
-                          ...formData,
-                          skills: formData.skills.filter(s => s !== skill)
-                        })}
-                      >
-                        <X size={14} color={colors.success} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-                <View style={styles.addTagRow}>
-                  <TextInput
-                    style={[styles.addTagInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                    value={newSkill}
-                    onChangeText={setNewSkill}
-                    placeholder="Ajouter une compétence"
-                    placeholderTextColor={colors.textTertiary}
-                    onSubmitEditing={() => {
-                      if (newSkill.trim() && !formData.skills.includes(newSkill.trim())) {
-                        setFormData({
-                          ...formData,
-                          skills: [...formData.skills, newSkill.trim()]
-                        });
-                        setNewSkill('');
-                      }
-                    }}
-                  />
-                  <TouchableOpacity
-                    style={styles.addTagButton}
-                    onPress={() => {
-                      if (newSkill.trim() && !formData.skills.includes(newSkill.trim())) {
-                        setFormData({
-                          ...formData,
-                          skills: [...formData.skills, newSkill.trim()]
-                        });
-                        setNewSkill('');
-                      }
-                    }}
-                  >
-                    <Text style={styles.addTagButtonText}>Ajouter</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <FormTagInput
+                control={control}
+                name="languages"
+                label="Langues parlées"
+                placeholder="Ajouter une langue"
+                tagStyle="primary"
+              />
+
+              <FormTagInput
+                control={control}
+                name="skills"
+                label="Compétences / Tags"
+                placeholder="Ajouter une compétence"
+                tagStyle="success"
+              />
 
               <TouchableOpacity
                 style={[styles.saveButton, { backgroundColor: colors.primary }]}
-                onPress={handleSubmit}
+                onPress={handleSubmit(onSubmit)}
                 disabled={loading}
               >
                 {loading ? (
@@ -556,9 +462,9 @@ export default function ProfileScreen() {
             </View>
           ) : (
             <>
-              {formData.bio && (
+              {formValues.bio && (
                 <View style={[styles.section, { borderTopColor: colors.border }]}>
-                  <Text style={[styles.bio, { color: colors.text }]}>{formData.bio}</Text>
+                  <Text style={[styles.bio, { color: colors.text }]}>{formValues.bio}</Text>
                 </View>
               )}
 
@@ -567,18 +473,18 @@ export default function ProfileScreen() {
                   <Mail size={16} color={colors.textSecondary} />
                   <Text style={[styles.infoText, { color: colors.textSecondary }]}>{user.email}</Text>
                 </View>
-                {(formData.city || formData.country) && (
+                {(formValues.city || formValues.country) && (
                   <View style={styles.infoItem}>
                     <MapPin size={16} color={colors.textSecondary} />
                     <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                      {[formData.city, formData.country].filter(Boolean).join(', ')}
+                      {[formValues.city, formValues.country].filter(Boolean).join(', ')}
                     </Text>
                   </View>
                 )}
-                {formData.phone && (
+                {formValues.phone && (
                   <View style={styles.infoItem}>
                     <Phone size={16} color={colors.textSecondary} />
-                    <Text style={[styles.infoText, { color: colors.textSecondary }]}>{formData.phone}</Text>
+                    <Text style={[styles.infoText, { color: colors.textSecondary }]}>{formValues.phone}</Text>
                   </View>
                 )}
                 <View style={styles.infoItem}>
@@ -593,11 +499,11 @@ export default function ProfileScreen() {
                 </View>
               </View>
 
-              {formData.languages.length > 0 && (
+              {formValues.languages.length > 0 && (
                 <View style={[styles.section, { borderTopColor: colors.border }]}>
                   <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Langues</Text>
                   <View style={styles.tags}>
-                    {formData.languages.map((lang) => (
+                    {formValues.languages.map((lang) => (
                       <View key={lang} style={[styles.tag, { backgroundColor: colors.primaryLight }]}>
                         <Text style={[styles.tagText, { color: colors.primary }]}>{lang}</Text>
                       </View>
@@ -606,11 +512,11 @@ export default function ProfileScreen() {
                 </View>
               )}
 
-              {formData.skills.length > 0 && (
+              {formValues.skills.length > 0 && (
                 <View style={[styles.section, { borderTopColor: colors.border }]}>
                   <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Compétences</Text>
                   <View style={styles.tags}>
-                    {formData.skills.map((skill) => (
+                    {formValues.skills.map((skill) => (
                       <View key={skill} style={[styles.tag, styles.skillTag, { backgroundColor: colors.successLight }]}>
                         <Text style={[styles.tagText, styles.skillTagText, { color: colors.success }]}>{skill}</Text>
                       </View>

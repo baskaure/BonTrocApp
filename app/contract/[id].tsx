@@ -120,6 +120,7 @@ export default function ContractScreen() {
     : contract.proposal?.from_user?.display_name;
 
   async function handleAccept() {
+    if (!contract) return;
     if (hasUserAccepted) {
       setError('Vous avez déjà accepté ce contrat.');
       return;
@@ -186,6 +187,7 @@ export default function ContractScreen() {
   }
 
   async function downloadContract() {
+    if (!contract) return;
     try {
       const htmlContent = `
 <!DOCTYPE html>

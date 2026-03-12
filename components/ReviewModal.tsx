@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { X, Star, CheckCircle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { FormInput } from './ui/FormInput';
+import { reviewSchema, ReviewFormData } from '@/lib/validations/review';
 
 const REVIEW_TAGS = [
   'Ponctuel',
@@ -24,12 +28,22 @@ type ReviewModalProps = {
 
 export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewModalProps) {
   const { user } = useAuth();
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState('');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    watch,
+  } = useForm<ReviewFormData>({
+    resolver: zodResolver(reviewSchema),
+    defaultValues: { rating: 0, comment: '', tags: [] },
+  });
+
+  const rating = watch('rating');
+  const selectedTags = watch('tags') || [];
 
   const proposal = exchange.contract?.proposal;
   const revieweeId = proposal?.from_user_id === user?.id
@@ -40,19 +54,11 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
     : proposal?.from_user?.display_name;
 
   const toggleTag = (tag: string) => {
-    setSelectedTags(prev =>
-      prev.includes(tag)
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    );
+    const current = selectedTags;
+    setValue('tags', current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag]);
   };
 
-  async function handleSubmit() {
-    if (rating === 0) {
-      setError('Veuillez donner une note');
-      return;
-    }
-
+  const onSubmit = async (data: ReviewFormData) => {
     setLoading(true);
     setError('');
 
@@ -63,9 +69,9 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
           exchange_id: exchange.id,
           reviewer_id: user?.id,
           reviewee_id: revieweeId,
-          rating,
-          comment: comment.trim() || null,
-          tags: selectedTags,
+          rating: data.rating,
+          comment: data.comment?.trim() || null,
+          tags: data.tags,
         });
 
       if (reviewError) throw reviewError;
@@ -148,7 +154,7 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
                 {[1, 2, 3, 4, 5].map((star) => (
                   <TouchableOpacity
                     key={star}
-                    onPress={() => setRating(star)}
+                    onPress={() => setValue('rating', star)}
                     style={styles.starButton}
                   >
                     <Star
@@ -190,18 +196,18 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
             </View>
 
             <View style={styles.commentSection}>
-              <Text style={styles.label}>Commentaire (optionnel)</Text>
-              <TextInput
-                style={styles.textArea}
-                multiline
-                numberOfLines={4}
-                placeholder="Partagez votre expérience avec la communauté..."
-                value={comment}
-                onChangeText={setComment}
-                placeholderTextColor="#999"
-                returnKeyType="default"
-                blurOnSubmit={true}
-                textAlignVertical="top"
+              <FormInput
+                control={control}
+                name="comment"
+                label="Commentaire (optionnel)"
+                inputProps={{
+                  multiline: true,
+                  numberOfLines: 4,
+                  placeholder: 'Partagez votre expérience avec la communauté...',
+                  returnKeyType: 'default',
+                  blurOnSubmit: true,
+                  style: { minHeight: 100, textAlignVertical: 'top' },
+                }}
               />
               <Text style={styles.hint}>
                 Votre avis sera visible publiquement sur le profil de {revieweeName}
@@ -224,7 +230,7 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.submitButton, (loading || rating === 0) && styles.submitButtonDisabled]}
-              onPress={handleSubmit}
+              onPress={handleSubmit(onSubmit)}
               disabled={loading || rating === 0}
             >
               {loading ? (

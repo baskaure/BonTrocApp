@@ -647,20 +647,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  contractButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-  contractButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
   disputeInfo: {
     flexDirection: 'row',
     alignItems: 'flex-start',

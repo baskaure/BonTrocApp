@@ -2,16 +2,13 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/lib/theme';
+import { ArrowLeft, MapPin, Star, TrendingUp, Sparkles, Shield, MessageCircle, Pencil, Trash2, Calendar, Flag } from 'lucide-react-native';
 import { Listing, Review } from '@/lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser, useReviews } from '@/lib/store/hooks';
 import { supabase } from '@/lib/supabase';
 import { PublicProfileHeader } from '@/components/PublicProfileHeader';
 import { useHeaderHeightStore } from '@/lib/store/headerHeight';
-
-type ReviewWithReviewer = Review & {
-  reviewer?: { display_name: string; avatar_url?: string };
-};
 
 export default function PublicProfileScreen() {
   const router = useRouter();

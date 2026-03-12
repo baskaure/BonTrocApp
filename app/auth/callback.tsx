@@ -60,7 +60,7 @@ export default function AuthCallback() {
 
         if (error) {
           console.error('OAuth error:', error, error_description);
-          router.replace('/auth?error=' + encodeURIComponent(error_description || error));
+          router.replace(('/auth?error=' + encodeURIComponent(error_description || error)) as '/auth');
           return;
         }
 
@@ -73,7 +73,7 @@ export default function AuthCallback() {
 
           if (sessionError) {
             console.error('Session error:', sessionError);
-            router.replace('/auth?error=' + encodeURIComponent(sessionError.message));
+            router.replace(('/auth?error=' + encodeURIComponent(sessionError.message)) as '/auth');
             return;
           }
 
@@ -82,7 +82,7 @@ export default function AuthCallback() {
             // Succès ! Rediriger vers l'app
             router.replace('/');
           } else {
-            router.replace('/auth?error=No session created');
+            router.replace('/auth' as const);
           }
         } else {
           console.warn('No tokens found in callback URL');
@@ -91,7 +91,7 @@ export default function AuthCallback() {
         }
       } catch (err: any) {
         console.error('Callback error:', err);
-        router.replace('/auth?error=' + encodeURIComponent(err.message || 'Erreur inconnue'));
+        router.replace(('/auth?error=' + encodeURIComponent(err.message || 'Erreur inconnue')) as '/auth');
       }
     };
 

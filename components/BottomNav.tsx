@@ -29,9 +29,9 @@ export const BottomNav = React.memo(() => {
   }), [isActive]);
 
   // Navigation instantanée sans animation
-  const navigate = useCallback((path: string) => {
-    if (pathname === path) return; // Déjà sur cette page
-    router.replace(path); // Utiliser replace pour une navigation instantanée
+  const navigate = useCallback((path: '/' | '/proposals' | '/exchanges' | '/profile') => {
+    if (pathname === path) return;
+    router.replace(path);
   }, [pathname, router]);
 
   if (!user) return null;

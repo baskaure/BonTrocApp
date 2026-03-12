@@ -1,14 +1,26 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-auth-session';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { FormInput } from '@/components/ui/FormInput';
 import Svg, { Path } from 'react-native-svg';
+
+const authSchema = z.object({
+  email: z.string().email('Email invalide'),
+  password: z.string().min(6, 'Le mot de passe doit faire au moins 6 caractères'),
+  displayName: z.string().optional(),
+  username: z.string().optional(),
+});
+
+type AuthFormData = z.infer<typeof authSchema>;
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -41,18 +53,32 @@ export default function AuthScreen() {
   const { signIn, signUp, user, loading: authLoading } = useAuth();
   const { colors } = useTheme();
   const [mode, setMode] = useState<'login' | 'register'>(params.mode === 'register' ? 'register' : 'login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const isProcessingOAuth = useRef(false);
 
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setError,
+    formState: { errors },
+  } = useForm<AuthFormData>({
+    resolver: zodResolver(authSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+      displayName: '',
+      username: '',
+    },
+  });
+
+  const watchedValues = watch();
+
   // Mettre à jour le mode quand les paramètres changent
   useEffect(() => {
     if (params.mode === 'register' || params.mode === 'login') {
-      setMode(params.mode);
+      setMode(params.mode as 'login' | 'register');
     }
     
     // Afficher les erreurs OAuth si présentes dans les paramètres d'URL
@@ -335,17 +361,31 @@ export default function AuthScreen() {
   };
 
 
-  const handleSubmit = async () => {
+  const onSubmit = async (data: AuthFormData) => {
     if (loading) return;
-    
-    setLoading(true);
 
+    if (mode === 'register') {
+      if (!data.displayName || data.displayName.length < 2) {
+        setError('displayName', { message: 'Le nom doit faire au moins 2 caractères' });
+        return;
+      }
+      if (!data.username || data.username.length < 2) {
+        setError('username', { message: "Le nom d'utilisateur doit faire au moins 2 caractères" });
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(data.username)) {
+        setError('username', { message: "Lettres, chiffres et underscores uniquement" });
+        return;
+      }
+    }
+
+    setLoading(true);
     try {
       if (mode === 'login') {
-        await signIn(email, password);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await signIn(data.email, data.password);
+        await new Promise((resolve) => setTimeout(resolve, 500));
       } else {
-        await signUp(email, password, displayName, username);
+        await signUp(data.email, data.password, data.displayName!, data.username!);
         Alert.alert('Succès', 'Compte créé ! Vous pouvez maintenant vous connecter.');
         setMode('login');
       }
@@ -396,84 +436,74 @@ export default function AuthScreen() {
 
         {mode === 'register' && (
           <>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Nom d'affichage</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }
-                ]}
-                value={displayName}
-                onChangeText={setDisplayName}
-                placeholder="Votre nom"
-                placeholderTextColor={colors.textTertiary}
-                returnKeyType="next"
-                blurOnSubmit={false}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Nom d'utilisateur</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }
-                ]}
-                value={username}
-                onChangeText={setUsername}
-                placeholder="username"
-                placeholderTextColor={colors.textTertiary}
-                autoCapitalize="none"
-                returnKeyType="next"
-                blurOnSubmit={false}
-              />
-            </View>
+            <FormInput
+              control={control}
+              name="displayName"
+              label="Nom d'affichage"
+              error={errors.displayName}
+              inputProps={{
+                placeholder: 'Votre nom',
+                returnKeyType: 'next',
+                blurOnSubmit: false,
+              }}
+            />
+            <FormInput
+              control={control}
+              name="username"
+              label="Nom d'utilisateur"
+              error={errors.username}
+              inputProps={{
+                placeholder: 'username',
+                autoCapitalize: 'none',
+                returnKeyType: 'next',
+                blurOnSubmit: false,
+              }}
+            />
           </>
         )}
 
-        <View style={styles.inputGroup}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Email</Text>
-          <TextInput
-            style={[
-              styles.input,
-              { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }
-            ]}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="votre@email.com"
-            placeholderTextColor={colors.textTertiary}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            returnKeyType="next"
-            blurOnSubmit={false}
-          />
-        </View>
+        <FormInput
+          control={control}
+          name="email"
+          label="Email"
+          error={errors.email}
+          inputProps={{
+            placeholder: 'votre@email.com',
+            keyboardType: 'email-address',
+            autoCapitalize: 'none',
+            returnKeyType: 'next',
+            blurOnSubmit: false,
+          }}
+        />
 
-        <View style={styles.inputGroup}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Mot de passe</Text>
-          <TextInput
-            style={[
-              styles.input,
-              { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }
-            ]}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            placeholderTextColor={colors.textTertiary}
-            secureTextEntry
-            returnKeyType="done"
-            onSubmitEditing={Keyboard.dismiss}
-            blurOnSubmit={true}
-          />
-        </View>
+        <FormInput
+          control={control}
+          name="password"
+          label="Mot de passe"
+          error={errors.password}
+          inputProps={{
+            placeholder: '••••••••',
+            secureTextEntry: true,
+            returnKeyType: 'done',
+          }}
+        />
 
         <TouchableOpacity
           style={[
-            styles.submitButton, 
-            (loading || !email || !password || (mode === 'register' && (!displayName || !username))) && styles.submitButtonDisabled
+            styles.submitButton,
+            (loading ||
+              !watchedValues.email ||
+              !watchedValues.password ||
+              (mode === 'register' && (!watchedValues.displayName || !watchedValues.username))) &&
+              styles.submitButtonDisabled,
           ]}
-          onPress={handleSubmit}
-          disabled={loading || !email || !password || (mode === 'register' && (!displayName || !username))}
+          onPress={handleSubmit(onSubmit)}
+          disabled={
+            loading ||
+            !watchedValues.email ||
+            !watchedValues.password ||
+            (mode === 'register' && (!watchedValues.displayName || !watchedValues.username))
+          }
         >
           {loading ? (
             <ActivityIndicator color="#FFF" />

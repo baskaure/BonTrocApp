@@ -13,7 +13,7 @@ function getListingCacheKey(filters: ListingFilters): ListingCacheKey {
 }
 
 // Helper pour vérifier si les données sont encore valides
-function isCacheValid<T>(cached: CachedData<T> | null, duration: number): boolean {
+function isCacheValid<T>(cached: CachedData<T> | null | undefined, duration: number): boolean {
   if (!cached) return false;
   const now = Date.now();
   const age = now - cached.timestamp;

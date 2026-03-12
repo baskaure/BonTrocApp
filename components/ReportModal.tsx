@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { X, AlertTriangle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { FormInput } from './ui/FormInput';
+import { reportSchema, ReportFormData } from '@/lib/validations/report';
 
 const REPORT_REASONS = [
   { value: 'spam', label: 'Spam ou publicité' },
@@ -23,21 +27,32 @@ type ReportModalProps = {
 
 export function ReportModal({ visible, onClose, targetType, targetId, targetUserId }: ReportModalProps) {
   const { user } = useAuth();
-  const [reason, setReason] = useState('');
-  const [details, setDetails] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!user || !reason) return;
+  const {
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+  } = useForm<ReportFormData>({
+    resolver: zodResolver(reportSchema),
+    defaultValues: { reason: undefined, details: '' },
+  });
+
+  const reason = watch('reason');
+
+  const onSubmit = async (data: ReportFormData) => {
+    if (!user) return;
 
     setLoading(true);
 
     try {
       const reportData: any = {
         reporter_id: user.id,
-        reason,
-        details: details || undefined,
+        reason: data.reason,
+        details: data.details || undefined,
       };
 
       if (targetUserId) {
@@ -61,11 +76,10 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
       if (insertError) throw insertError;
 
       setSuccess(true);
+      reset({ reason: undefined, details: '' });
       setTimeout(() => {
         onClose();
         setSuccess(false);
-        setReason('');
-        setDetails('');
       }, 2000);
     } catch (err: any) {
       Alert.alert('Erreur', err.message || 'Erreur lors de l\'envoi du signalement');
@@ -125,7 +139,7 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
                         styles.reasonItem,
                         reason === r.value && styles.reasonItemSelected,
                       ]}
-                      onPress={() => setReason(r.value)}
+                      onPress={() => setValue('reason', r.value as 'spam' | 'inappropriate' | 'fraud' | 'harassment' | 'fake' | 'other')}
                     >
                       <View style={[
                         styles.radio,
@@ -144,18 +158,17 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
                 </View>
               </View>
 
-              <View style={styles.detailsSection}>
-                <Text style={styles.label}>Détails (optionnel)</Text>
-                <TextInput
-                  style={styles.textArea}
-                  multiline
-                  numberOfLines={3}
-                  placeholder="Décrivez le problème..."
-                  value={details}
-                  onChangeText={setDetails}
-                  placeholderTextColor="#999"
-                />
-              </View>
+              <FormInput
+                control={control}
+                name="details"
+                label="Détails (optionnel)"
+                inputProps={{
+                  multiline: true,
+                  numberOfLines: 3,
+                  placeholder: 'Décrivez le problème...',
+                  style: { minHeight: 100, textAlignVertical: 'top' },
+                }}
+              />
             </ScrollView>
           )}
 
@@ -169,7 +182,7 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.submitButton, (!reason || loading) && styles.submitButtonDisabled]}
-                onPress={handleSubmit}
+                onPress={handleSubmit(onSubmit)}
                 disabled={!reason || loading}
               >
                 {loading ? (

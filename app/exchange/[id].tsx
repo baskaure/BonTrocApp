@@ -544,6 +544,18 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
   },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  errorText: {
+    fontSize: 14,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

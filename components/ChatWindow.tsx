@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
-import { Send, AlertTriangle } from 'lucide-react-native';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Send } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { Controller } from 'react-hook-form';
+import { chatMessageSchema, ChatMessageFormData } from '@/lib/validations/chat';
 
 type ChatMessage = {
   id: string;
@@ -24,10 +28,21 @@ type ChatWindowProps = {
 export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [newMessage, setNewMessage] = useState('');
   const [chatId, setChatId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    watch,
+  } = useForm<ChatMessageFormData>({
+    resolver: zodResolver(chatMessageSchema),
+    defaultValues: { message: '' },
+  });
+
+  const message = watch('message');
 
   useEffect(() => {
     loadChat();
@@ -134,13 +149,13 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
     }
   }
 
-  const handleSend = async () => {
-    if (!newMessage.trim() || !chatId || !user) return;
+  const onSend = async (data: ChatMessageFormData) => {
+    if (!chatId || !user) return;
 
-    const messageToSend = newMessage.trim();
+    const messageToSend = data.message.trim();
     setLoading(true);
-    setNewMessage('');
-    Keyboard.dismiss(); // Fermer le clavier immédiatement après avoir nettoyé le message
+    reset({ message: '' });
+    Keyboard.dismiss();
 
     try {
       // Récupérer les infos de la proposition pour connaître l'autre utilisateur
@@ -226,7 +241,7 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
       await loadMessages();
     } catch (error) {
       console.error('Error sending message:', error);
-      setNewMessage(messageToSend);
+      reset({ message: messageToSend });
     } finally {
       setLoading(false);
     }
@@ -301,31 +316,35 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
       </ScrollView>
 
       <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          value={newMessage}
-          onChangeText={setNewMessage}
-          placeholder="Écrivez votre message..."
-          placeholderTextColor="#999"
-          multiline
-          maxLength={500}
-          returnKeyType="send"
-          blurOnSubmit={true}
-          onSubmitEditing={() => {
-            if (newMessage.trim() && !loading) {
-              handleSend();
-            } else {
-              Keyboard.dismiss();
-            }
-          }}
+        <Controller
+          control={control}
+          name="message"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <TextInput
+              style={styles.input}
+              value={value}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              placeholder="Écrivez votre message..."
+              placeholderTextColor="#999"
+              multiline
+              maxLength={500}
+              returnKeyType="send"
+              blurOnSubmit={true}
+              onSubmitEditing={() => {
+                if (value.trim() && !loading) {
+                  handleSubmit(onSend)();
+                } else {
+                  Keyboard.dismiss();
+                }
+              }}
+            />
+          )}
         />
         <TouchableOpacity
-          style={[styles.sendButton, (!newMessage.trim() || loading) && styles.sendButtonDisabled]}
-          onPress={() => {
-            handleSend();
-            Keyboard.dismiss();
-          }}
-          disabled={!newMessage.trim() || loading}
+          style={[styles.sendButton, (!message.trim() || loading) && styles.sendButtonDisabled]}
+          onPress={handleSubmit(onSend)}
+          disabled={!message.trim() || loading}
         >
           {loading ? (
             <ActivityIndicator color="#FFF" size="small" />

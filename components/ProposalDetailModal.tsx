@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { X, MessageCircle, CheckCircle, XCircle, Send } from 'lucide-react-native';
 import { supabase, Proposal } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { ChatWindow } from './ChatWindow';
+import { FormInput } from './ui/FormInput';
+import { counterProposalSchema, CounterProposalFormData } from '@/lib/validations/proposal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomNav } from './BottomNav';
 
@@ -21,10 +25,18 @@ export function ProposalDetailModal({ proposal, visible, onClose, onUpdate, full
   const { colors } = useTheme();
   const [showChat, setShowChat] = useState(false);
   const [showCounterForm, setShowCounterForm] = useState(false);
-  const [counterMessage, setCounterMessage] = useState('');
-  const [counterOffer, setCounterOffer] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<CounterProposalFormData>({
+    resolver: zodResolver(counterProposalSchema),
+    defaultValues: { counterOffer: '', counterMessage: '' },
+  });
 
   if (!proposal) return null;
 
@@ -79,12 +91,7 @@ export function ProposalDetailModal({ proposal, visible, onClose, onUpdate, full
     }
   };
 
-  const handleCounter = async () => {
-    if (!counterOffer.trim() || !counterMessage.trim()) {
-      setError('Veuillez remplir tous les champs');
-      return;
-    }
-
+  const handleCounter = async (data: CounterProposalFormData) => {
     setLoading(true);
     setError('');
     try {
@@ -92,8 +99,8 @@ export function ProposalDetailModal({ proposal, visible, onClose, onUpdate, full
         listing_id: proposal.listing_id,
         from_user_id: user!.id,
         to_user_id: otherUser!.id,
-        message: counterMessage,
-        offer_payload: { description: counterOffer },
+        message: data.counterMessage,
+        offer_payload: { description: data.counterOffer },
         status: 'pending',
         parent_proposal_id: proposal.id,
       });
@@ -106,8 +113,7 @@ export function ProposalDetailModal({ proposal, visible, onClose, onUpdate, full
         .eq('id', proposal.id);
 
       setShowCounterForm(false);
-      setCounterMessage('');
-      setCounterOffer('');
+      reset({ counterOffer: '', counterMessage: '' });
       onUpdate();
       onClose();
     } catch (error: any) {
@@ -223,38 +229,43 @@ export function ProposalDetailModal({ proposal, visible, onClose, onUpdate, full
             {showCounterForm && (
               <View style={styles.counterForm}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Votre contre-proposition</Text>
-                <TextInput
-                  style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                  multiline
-                  numberOfLines={4}
-                  placeholder="Décrivez votre contre-proposition..."
-                  value={counterOffer}
-                  onChangeText={setCounterOffer}
-                  placeholderTextColor={colors.textTertiary}
+                <FormInput
+                  control={control}
+                  name="counterOffer"
+                  label="Ce que vous proposez *"
+                  error={errors.counterOffer}
+                  inputProps={{
+                    multiline: true,
+                    numberOfLines: 4,
+                    placeholder: 'Décrivez votre contre-proposition...',
+                    style: { minHeight: 80, textAlignVertical: 'top' },
+                  }}
                 />
-                <TextInput
-                  style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                  multiline
-                  numberOfLines={3}
-                  placeholder="Message..."
-                  value={counterMessage}
-                  onChangeText={setCounterMessage}
-                  placeholderTextColor={colors.textTertiary}
+                <FormInput
+                  control={control}
+                  name="counterMessage"
+                  label="Message *"
+                  error={errors.counterMessage}
+                  inputProps={{
+                    multiline: true,
+                    numberOfLines: 3,
+                    placeholder: 'Message...',
+                    style: { minHeight: 60, textAlignVertical: 'top' },
+                  }}
                 />
                 <View style={styles.counterActions}>
                   <TouchableOpacity
                     style={[styles.cancelButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
                     onPress={() => {
                       setShowCounterForm(false);
-                      setCounterMessage('');
-                      setCounterOffer('');
+                      reset({ counterOffer: '', counterMessage: '' });
                     }}
                   >
                     <Text style={[styles.cancelButtonText, { color: colors.text }]}>Annuler</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.submitButton, { backgroundColor: colors.primary }]}
-                    onPress={handleCounter}
+                    onPress={handleSubmit(handleCounter)}
                     disabled={loading}
                   >
                     {loading ? (

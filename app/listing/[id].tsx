@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, TextInput, Alert, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useTheme } from '@/lib/theme';
 import { useAuth } from '@/lib/auth-context';
 import { supabase, Listing } from '@/lib/supabase';
@@ -8,6 +10,8 @@ import { ArrowLeft, MapPin, Star, TrendingUp, Sparkles, Shield, MessageCircle, P
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomNav } from '@/components/BottomNav';
 import { ReportModal } from '@/components/ReportModal';
+import { FormInput } from '@/components/ui/FormInput';
+import { proposalSchema, ProposalFormData } from '@/lib/validations/proposal';
 import * as ImagePicker from 'expo-image-picker';
 import { X } from 'lucide-react-native';
 
@@ -19,10 +23,13 @@ export default function ListingDetailScreen() {
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProposalForm, setShowProposalForm] = useState(false);
-  const [proposalMessage, setProposalMessage] = useState('');
-  const [proposalOffer, setProposalOffer] = useState('');
   const [proposalLoading, setProposalLoading] = useState(false);
   const [proposalError, setProposalError] = useState('');
+
+  const proposalForm = useForm<ProposalFormData>({
+    resolver: zodResolver(proposalSchema),
+    defaultValues: { message: '', offer: '' },
+  });
   const [editMode, setEditMode] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
@@ -161,24 +168,21 @@ export default function ListingDetailScreen() {
     }
   };
 
-  const handleSubmitProposal = async () => {
-    if (!user || !proposalMessage.trim() || !proposalOffer.trim() || !listing) {
-      setProposalError('Veuillez remplir tous les champs');
-      return;
-    }
+  const handleSubmitProposal = async (formData: ProposalFormData) => {
+    if (!user || !listing) return;
 
     setProposalError('');
     setProposalLoading(true);
 
     try {
-      const { data, error: insertError } = await supabase
+      const { data: insertedProposal, error: insertError } = await supabase
         .from('proposals')
         .insert({
           listing_id: listing.id,
           from_user_id: user.id,
           to_user_id: listing.user_id,
-          message: proposalMessage,
-          offer_payload: { description: proposalOffer },
+          message: formData.message,
+          offer_payload: { description: formData.offer },
           status: 'pending',
         })
         .select()
@@ -186,33 +190,26 @@ export default function ListingDetailScreen() {
 
       if (insertError) throw insertError;
 
-      if (data) {
+      if (insertedProposal) {
         const { data: notifData, error: notifError } = await supabase
           .from('notifications')
           .insert({
             user_id: listing.user_id,
             type: 'proposal_received',
             message: `${user.display_name || user.username} vous a fait une proposition`,
-            related_id: data.id,
+            related_id: insertedProposal.id,
           })
           .select();
 
-        if (notifError) {
-          if (notifError.code === 'PGRST205') {
-            console.warn('Table notifications does not exist. Please run the SQL script.');
-          } else {
-            console.error('Error creating proposal notification:', notifError);
-          }
-        } else if (notifData) {
-          console.log('Proposal notification created:', notifData[0]?.id);
+        if (notifError && notifError.code !== 'PGRST205') {
+          console.error('Error creating proposal notification:', notifError);
         }
       }
 
-      setProposalMessage('');
-      setProposalOffer('');
+      proposalForm.reset({ message: '', offer: '' });
       setShowProposalForm(false);
       Alert.alert('Succès', 'Votre proposition a été envoyée !');
-      router.push(`/proposal/${data.id}`);
+      router.push(`/proposal/${insertedProposal!.id}`);
     } catch (err: any) {
       setProposalError(err.message || 'Une erreur est survenue');
     } finally {
@@ -517,35 +514,35 @@ export default function ListingDetailScreen() {
               {!isOwnListing && user && showProposalForm && (
                 <View style={[styles.proposalForm, { backgroundColor: colors.background, borderColor: colors.border }]}>
                   <Text style={[styles.proposalFormTitle, { color: colors.text }]}>Votre proposition</Text>
-                  <View style={styles.formGroup}>
-                    <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Ce que vous proposez en échange *</Text>
-                    <TextInput
-                      style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
-                      multiline
-                      numberOfLines={4}
-                      placeholder="Décrivez ce que vous proposez..."
-                      value={proposalOffer}
-                      onChangeText={setProposalOffer}
-                      placeholderTextColor={colors.textTertiary}
-                      returnKeyType="next"
-                      blurOnSubmit={false}
-                    />
-                  </View>
-                  <View style={styles.formGroup}>
-                    <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Message *</Text>
-                    <TextInput
-                      style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
-                      multiline
-                      numberOfLines={3}
-                      placeholder="Ajoutez un message personnalisé..."
-                      value={proposalMessage}
-                      onChangeText={setProposalMessage}
-                      placeholderTextColor={colors.textTertiary}
-                      returnKeyType="done"
-                      onSubmitEditing={Keyboard.dismiss}
-                      blurOnSubmit={true}
-                    />
-                  </View>
+                  <FormInput
+                    control={proposalForm.control}
+                    name="offer"
+                    label="Ce que vous proposez en échange *"
+                    error={proposalForm.formState.errors.offer}
+                    inputProps={{
+                      multiline: true,
+                      numberOfLines: 4,
+                      placeholder: 'Décrivez ce que vous proposez...',
+                      returnKeyType: 'next',
+                      blurOnSubmit: false,
+                      style: { minHeight: 80, textAlignVertical: 'top' },
+                    }}
+                  />
+                  <FormInput
+                    control={proposalForm.control}
+                    name="message"
+                    label="Message *"
+                    error={proposalForm.formState.errors.message}
+                    inputProps={{
+                      multiline: true,
+                      numberOfLines: 3,
+                      placeholder: 'Ajoutez un message personnalisé...',
+                      returnKeyType: 'done',
+                      onSubmitEditing: () => Keyboard.dismiss(),
+                      blurOnSubmit: true,
+                      style: { minHeight: 60, textAlignVertical: 'top' },
+                    }}
+                  />
                   {proposalError && (
                     <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
                       <Text style={[styles.errorText, { color: colors.error }]}>{proposalError}</Text>
@@ -556,15 +553,14 @@ export default function ListingDetailScreen() {
                       style={[styles.cancelProposalButton, { borderColor: colors.border, backgroundColor: colors.surface }]}
                       onPress={() => {
                         setShowProposalForm(false);
-                        setProposalMessage('');
-                        setProposalOffer('');
+                        proposalForm.reset({ message: '', offer: '' });
                       }}
                     >
                       <Text style={[styles.cancelProposalText, { color: colors.text }]}>Annuler</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.sendProposalButton, { backgroundColor: colors.primary }]}
-                      onPress={handleSubmitProposal}
+                      onPress={proposalForm.handleSubmit(handleSubmitProposal)}
                       disabled={proposalLoading}
                     >
                       {proposalLoading ? (

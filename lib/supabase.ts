@@ -125,6 +125,7 @@ export type Review = {
   comment?: string;
   tags?: string[];
   created_at: string;
+  reviewer?: { display_name: string; avatar_url?: string };
 };
 
 export type Dispute = {

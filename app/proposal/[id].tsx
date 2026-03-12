@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/lib/auth-context';
 import { supabase, Proposal } from '@/lib/supabase';
-import { ArrowLeft, MessageCircle, CheckCircle, XCircle, Send, Lightbulb, User, Clock, FileText } from 'lucide-react-native';
+import { ArrowLeft, MessageCircle, CheckCircle, XCircle, Send, Lightbulb, FileText } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { BottomNav } from '@/components/BottomNav';
 import { ChatWindow } from '@/components/ChatWindow';
+import { FormInput } from '@/components/ui/FormInput';
+import { counterProposalSchema, CounterProposalFormData } from '@/lib/validations/proposal';
 
 export default function ProposalDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -18,10 +22,18 @@ export default function ProposalDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCounterForm, setShowCounterForm] = useState(false);
-  const [counterMessage, setCounterMessage] = useState('');
-  const [counterOffer, setCounterOffer] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<CounterProposalFormData>({
+    resolver: zodResolver(counterProposalSchema),
+    defaultValues: { counterOffer: '', counterMessage: '' },
+  });
 
   useEffect(() => {
     if (id) {
@@ -198,12 +210,7 @@ export default function ProposalDetailScreen() {
     );
   };
 
-  const handleCounter = async () => {
-    if (!counterOffer.trim() || !counterMessage.trim()) {
-      setActionError('Veuillez remplir tous les champs');
-      return;
-    }
-
+  const handleCounter = async (data: CounterProposalFormData) => {
     setActionLoading(true);
     setActionError('');
     try {
@@ -211,8 +218,8 @@ export default function ProposalDetailScreen() {
         listing_id: proposal.listing_id,
         from_user_id: user!.id,
         to_user_id: otherUser!.id,
-        message: counterMessage,
-        offer_payload: { description: counterOffer },
+        message: data.counterMessage,
+        offer_payload: { description: data.counterOffer },
         status: 'pending',
         parent_proposal_id: proposal.id,
       });
@@ -225,8 +232,7 @@ export default function ProposalDetailScreen() {
         .eq('id', proposal.id);
 
       setShowCounterForm(false);
-      setCounterMessage('');
-      setCounterOffer('');
+      reset({ counterOffer: '', counterMessage: '' });
       await loadProposal();
       Alert.alert('Succès', 'Contre-proposition envoyée !');
     } catch (error: any) {
@@ -398,33 +404,33 @@ export default function ProposalDetailScreen() {
                       <Send size={16} color={colors.primary} />
                       <Text style={[styles.sectionTitle, { color: colors.text }]}>Créer une contre-proposition</Text>
                     </View>
-                    <View style={styles.formGroup}>
-                      <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Ce que vous proposez *</Text>
-                      <TextInput
-                        style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                        multiline
-                        numberOfLines={3}
-                        placeholder="Décrivez ce que vous proposez en échange..."
-                        value={counterOffer}
-                        onChangeText={setCounterOffer}
-                        placeholderTextColor={colors.textTertiary}
-                        returnKeyType="next"
-                      />
-                    </View>
-                    <View style={styles.formGroup}>
-                      <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Message *</Text>
-                      <TextInput
-                        style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                        multiline
-                        numberOfLines={2}
-                        placeholder="Ajoutez un message pour accompagner votre contre-proposition..."
-                        value={counterMessage}
-                        onChangeText={setCounterMessage}
-                        placeholderTextColor={colors.textTertiary}
-                        returnKeyType="done"
-                        onSubmitEditing={Keyboard.dismiss}
-                      />
-                    </View>
+                    <FormInput
+                      control={control}
+                      name="counterOffer"
+                      label="Ce que vous proposez *"
+                      error={errors.counterOffer}
+                      inputProps={{
+                        multiline: true,
+                        numberOfLines: 3,
+                        placeholder: 'Décrivez ce que vous proposez en échange...',
+                        returnKeyType: 'next',
+                        style: { minHeight: 80, textAlignVertical: 'top' },
+                      }}
+                    />
+                    <FormInput
+                      control={control}
+                      name="counterMessage"
+                      label="Message *"
+                      error={errors.counterMessage}
+                      inputProps={{
+                        multiline: true,
+                        numberOfLines: 2,
+                        placeholder: 'Ajoutez un message pour accompagner votre contre-proposition...',
+                        returnKeyType: 'done',
+                        onSubmitEditing: () => Keyboard.dismiss(),
+                        style: { minHeight: 80, textAlignVertical: 'top' },
+                      }}
+                    />
                     {actionError && (
                       <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
                         <Text style={[styles.errorText, { color: colors.error }]}>{actionError}</Text>
@@ -435,8 +441,7 @@ export default function ProposalDetailScreen() {
                         style={[styles.counterActionButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
                         onPress={() => {
                           setShowCounterForm(false);
-                          setCounterMessage('');
-                          setCounterOffer('');
+                          reset({ counterOffer: '', counterMessage: '' });
                           setActionError('');
                         }}
                       >
@@ -444,7 +449,7 @@ export default function ProposalDetailScreen() {
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.counterActionButton, { backgroundColor: colors.primary }]}
-                        onPress={handleCounter}
+                        onPress={handleSubmit(handleCounter)}
                         disabled={actionLoading}
                       >
                         {actionLoading ? (
