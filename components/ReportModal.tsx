@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { X, AlertTriangle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme';
 import { FormInput } from './ui/FormInput';
 import { reportSchema, ReportFormData } from '@/lib/validations/report';
 
@@ -27,6 +28,7 @@ type ReportModalProps = {
 
 export function ReportModal({ visible, onClose, targetType, targetId, targetUserId }: ReportModalProps) {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -108,53 +110,59 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.modal}>
-          <View style={styles.header}>
+        <View style={[styles.modal, { backgroundColor: colors.surface }]}>
+          <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <View style={styles.headerTitle}>
-              <AlertTriangle size={20} color="#D8463E" />
-              <Text style={styles.title}>{getTitle()}</Text>
+              <AlertTriangle size={20} color={colors.error} />
+              <Text style={[styles.title, { color: colors.error }]}>{getTitle()}</Text>
             </View>
             <TouchableOpacity onPress={onClose}>
-              <X size={24} color="#3C4856" />
+              <X size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           {success ? (
             <View style={styles.successContainer}>
-              <View style={styles.successIcon}>
-                <AlertTriangle size={32} color="#1B9A5F" />
+              <View style={[styles.successIcon, { backgroundColor: colors.successLight }]}>
+                <AlertTriangle size={32} color={colors.success} />
               </View>
-              <Text style={styles.successTitle}>Signalement envoyé !</Text>
-              <Text style={styles.successText}>Merci pour votre vigilance</Text>
+              <Text style={[styles.successTitle, { color: colors.success }]}>Signalement envoyé !</Text>
+              <Text style={[styles.successText, { color: colors.textSecondary }]}>Merci pour votre vigilance</Text>
             </View>
           ) : (
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
               <View style={styles.reasonsSection}>
-                <Text style={styles.label}>Motif du signalement *</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Motif du signalement *</Text>
                 <View style={styles.reasons}>
-                  {REPORT_REASONS.map((r) => (
+                  {REPORT_REASONS.map((r) => {
+                    const selected = reason === r.value;
+                    return (
                     <TouchableOpacity
                       key={r.value}
                       style={[
                         styles.reasonItem,
-                        reason === r.value && styles.reasonItemSelected,
+                        { borderColor: colors.border },
+                        selected && { backgroundColor: colors.errorLight, borderColor: colors.error },
                       ]}
                       onPress={() => setValue('reason', r.value as 'spam' | 'inappropriate' | 'fraud' | 'harassment' | 'fake' | 'other')}
                     >
                       <View style={[
                         styles.radio,
-                        reason === r.value && styles.radioSelected,
+                        { borderColor: colors.borderStrong },
+                        selected && { borderColor: colors.error },
                       ]}>
-                        {reason === r.value && <View style={styles.radioInner} />}
+                        {selected && <View style={[styles.radioInner, { backgroundColor: colors.error }]} />}
                       </View>
                       <Text style={[
                         styles.reasonText,
-                        reason === r.value && styles.reasonTextSelected,
+                        { color: colors.text },
+                        selected && { color: colors.error, fontWeight: '600' },
                       ]}>
                         {r.label}
                       </Text>
                     </TouchableOpacity>
-                  ))}
+                    );
+                  })}
                 </View>
               </View>
 
@@ -173,15 +181,15 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
           )}
 
           {!success && (
-            <View style={styles.footer}>
+            <View style={[styles.footer, { borderTopColor: colors.border }]}>
               <TouchableOpacity
-                style={styles.cancelButton}
+                style={[styles.cancelButton, { borderColor: colors.border }]}
                 onPress={onClose}
               >
-                <Text style={styles.cancelButtonText}>Annuler</Text>
+                <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Annuler</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.submitButton, (!reason || loading) && styles.submitButtonDisabled]}
+                style={[styles.submitButton, { backgroundColor: colors.error }, (!reason || loading) && styles.submitButtonDisabled]}
                 onPress={handleSubmit(onSubmit)}
                 disabled={!reason || loading}
               >
@@ -236,9 +244,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#3C4856',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
     marginBottom: 12,
   },
   reasons: {

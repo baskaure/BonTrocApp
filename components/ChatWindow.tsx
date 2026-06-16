@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Send } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme';
 import { Controller } from 'react-hook-form';
 import { chatMessageSchema, ChatMessageFormData } from '@/lib/validations/chat';
 
@@ -27,6 +28,7 @@ type ChatWindowProps = {
 
 export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
   const { user } = useAuth();
+  const { colors, radius } = useTheme();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatId, setChatId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -257,7 +259,7 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
+      style={[styles.container, { borderTopColor: colors.border }]}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <ScrollView
@@ -268,7 +270,7 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
       >
         {messages.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Aucun message pour le moment</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Aucun message pour le moment</Text>
           </View>
         ) : (
           messages.map((message) => {
@@ -281,7 +283,10 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
                 <View
                   style={[
                     styles.messageBubble,
-                    isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther,
+                    { borderRadius: radius.lg },
+                    isOwn
+                      ? [styles.messageBubbleOwn, { backgroundColor: colors.primary }]
+                      : [styles.messageBubbleOther, { backgroundColor: colors.surfaceContainer, borderColor: colors.border }],
                   ]}
                 >
                   {!isOwn && message.sender && (
@@ -289,13 +294,13 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
                       onPress={() => onUserClick?.(message.sender_id)}
                       disabled={!onUserClick}
                     >
-                      <Text style={styles.senderName}>{message.sender.display_name}</Text>
+                      <Text style={[styles.senderName, { color: colors.textSecondary }]}>{message.sender.display_name}</Text>
                     </TouchableOpacity>
                   )}
                   <Text
                     style={[
                       styles.messageText,
-                      isOwn ? styles.messageTextOwn : styles.messageTextOther,
+                      { color: isOwn ? colors.onPrimary : colors.text },
                     ]}
                   >
                     {message.body}
@@ -303,7 +308,7 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
                   <Text
                     style={[
                       styles.messageTime,
-                      isOwn ? styles.messageTimeOwn : styles.messageTimeOther,
+                      { color: isOwn ? 'rgba(255, 255, 255, 0.7)' : colors.textTertiary },
                     ]}
                   >
                     {formatTime(message.created_at)}
@@ -321,12 +326,12 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
           name="message"
           render={({ field: { onChange, onBlur, value } }) => (
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surfaceContainer, borderColor: colors.border, color: colors.text }]}
               value={value}
               onChangeText={onChange}
               onBlur={onBlur}
               placeholder="Écrivez votre message..."
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.textTertiary}
               multiline
               maxLength={500}
               returnKeyType="send"
@@ -342,14 +347,14 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
           )}
         />
         <TouchableOpacity
-          style={[styles.sendButton, (!message.trim() || loading) && styles.sendButtonDisabled]}
+          style={[styles.sendButton, { backgroundColor: colors.primary }, (!message.trim() || loading) && styles.sendButtonDisabled]}
           onPress={handleSubmit(onSend)}
           disabled={!message.trim() || loading}
         >
           {loading ? (
-            <ActivityIndicator color="#FFF" size="small" />
+            <ActivityIndicator color={colors.onPrimary} size="small" />
           ) : (
-            <Send size={20} color="#FFF" />
+            <Send size={20} color={colors.onPrimary} />
           )}
         </TouchableOpacity>
       </View>
