@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
   container: {
     marginTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#E7EDF3',
     paddingTop: 16,
   },
   messagesContainer: {
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
   },
   emptyText: {
-    color: '#64748B',
+    color: '#3C4856',
     fontSize: 14,
   },
   messageRow: {
@@ -392,19 +392,19 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   messageBubbleOwn: {
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     borderBottomRightRadius: 4,
   },
   messageBubbleOther: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     borderBottomLeftRadius: 4,
   },
   senderName: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#3C4856',
     marginBottom: 4,
   },
   messageText: {
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
   messageTextOther: {
-    color: '#1E293B',
+    color: '#13202E',
   },
   messageTime: {
     fontSize: 11,
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
   },
   messageTimeOther: {
-    color: '#64748B',
+    color: '#3C4856',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -434,21 +434,21 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 15,
     maxHeight: 100,
-    color: '#1E293B',
+    color: '#13202E',
   },
   sendButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     alignItems: 'center',
     justifyContent: 'center',
   },

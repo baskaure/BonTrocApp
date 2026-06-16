@@ -6,7 +6,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { supabase, Notification } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
-import { BottomNav } from '@/components/BottomNav';
 
 export default function NotificationsScreen() {
   const { user } = useAuth();
@@ -163,7 +162,6 @@ export default function NotificationsScreen() {
         <View style={styles.centerContainer}>
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Veuillez vous connecter</Text>
         </View>
-        <BottomNav />
       </SafeAreaView>
     );
   }
@@ -249,7 +247,6 @@ export default function NotificationsScreen() {
         </ScrollView>
       )}
 
-      <BottomNav />
     </SafeAreaView>
   );
 }

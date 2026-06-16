@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#2B86CC',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -672,10 +672,10 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#13202E',
   },
   userNameClickable: {
-    color: '#19ADFA',
+    color: '#2B86CC',
   },
   rating: {
     flexDirection: 'row',
@@ -685,11 +685,11 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#3C4856',
   },
   newMember: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#3C4856',
     marginTop: 4,
   },
   location: {
@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#3C4856',
   },
   badges: {
     flexDirection: 'row',
@@ -708,7 +708,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   badge: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#E4F0F9',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
@@ -716,17 +716,17 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#19ADFA',
+    color: '#2B86CC',
   },
   section: {
     marginBottom: 20,
   },
   offerBox: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#E4F0F9',
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#E4F0F9',
   },
   offerHeader: {
     flexDirection: 'row',
@@ -737,21 +737,21 @@ const styles = StyleSheet.create({
   offerLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#19ADFA',
+    color: '#2B86CC',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   offerText: {
     fontSize: 15,
-    color: '#475569',
+    color: '#3C4856',
     lineHeight: 22,
   },
   seekBox: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#FCF1CC',
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: '#FCF1CC',
   },
   seekHeader: {
     flexDirection: 'row',
@@ -762,22 +762,22 @@ const styles = StyleSheet.create({
   seekLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#F59E0B',
+    color: '#F8C61E',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   seekText: {
     fontSize: 15,
-    color: '#475569',
+    color: '#3C4856',
     lineHeight: 22,
   },
   footer: {
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#E7EDF3',
   },
   proposeButton: {
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     padding: 16,
     borderRadius: 20,
     alignItems: 'center',
@@ -796,7 +796,7 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#3C4856',
   },
   ownerActions: {
     flexDirection: 'row',
@@ -812,11 +812,11 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#19ADFA',
+    borderColor: '#2B86CC',
     backgroundColor: '#FFF',
   },
   editButtonText: {
-    color: '#19ADFA',
+    color: '#2B86CC',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -829,21 +829,21 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#D8463E',
     backgroundColor: '#FFF',
   },
   deleteButtonText: {
-    color: '#EF4444',
+    color: '#D8463E',
     fontSize: 14,
     fontWeight: '600',
   },
   editForm: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
   },
   formRow: {
     flexDirection: 'row',
@@ -857,13 +857,13 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#475569',
+    color: '#3C4856',
     marginBottom: 8,
   },
   input: {
     backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     borderRadius: 12,
     padding: 12,
     fontSize: 15,
@@ -881,17 +881,17 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     backgroundColor: '#FFF',
     alignItems: 'center',
   },
   radioOptionSelected: {
-    backgroundColor: '#19ADFA',
-    borderColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
+    borderColor: '#2B86CC',
   },
   radioText: {
     fontSize: 14,
-    color: '#64748B',
+    color: '#3C4856',
     fontWeight: '600',
   },
   radioTextSelected: {
@@ -900,13 +900,13 @@ const styles = StyleSheet.create({
   selectContainer: {
     backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     borderRadius: 12,
     padding: 12,
   },
   selectText: {
     fontSize: 15,
-    color: '#1E293B',
+    color: '#13202E',
   },
   editActions: {
     flexDirection: 'row',
@@ -918,17 +918,17 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     alignItems: 'center',
   },
   cancelEditText: {
-    color: '#64748B',
+    color: '#3C4856',
     fontSize: 14,
     fontWeight: '600',
   },
   saveButton: {
     flex: 1,
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     padding: 12,
     borderRadius: 20,
     alignItems: 'center',
@@ -939,7 +939,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   deleteConfirmBox: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FBE7E5',
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
@@ -948,7 +948,7 @@ const styles = StyleSheet.create({
   },
   deleteConfirmText: {
     fontSize: 14,
-    color: '#991B1B',
+    color: '#D8463E',
     marginBottom: 12,
   },
   deleteConfirmActions: {
@@ -957,7 +957,7 @@ const styles = StyleSheet.create({
   },
   deleteConfirmButton: {
     flex: 1,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#D8463E',
     padding: 12,
     borderRadius: 20,
     alignItems: 'center',
@@ -972,12 +972,12 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     backgroundColor: '#FFF',
     alignItems: 'center',
   },
   deleteCancelButtonText: {
-    color: '#64748B',
+    color: '#3C4856',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -993,25 +993,25 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#D8463E',
   },
   reportButtonText: {
-    color: '#EF4444',
+    color: '#D8463E',
     fontSize: 14,
     fontWeight: '600',
   },
   proposalForm: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
   },
   proposalFormTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#13202E',
     marginBottom: 16,
   },
   proposalFormActions: {
@@ -1024,18 +1024,18 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     backgroundColor: '#FFF',
     alignItems: 'center',
   },
   cancelProposalText: {
-    color: '#64748B',
+    color: '#3C4856',
     fontSize: 14,
     fontWeight: '600',
   },
   sendProposalButton: {
     flex: 1,
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     padding: 12,
     borderRadius: 20,
     alignItems: 'center',
@@ -1046,7 +1046,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   authPrompt: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
@@ -1054,12 +1054,12 @@ const styles = StyleSheet.create({
   },
   authPromptText: {
     fontSize: 14,
-    color: '#64748B',
+    color: '#3C4856',
     marginBottom: 12,
     textAlign: 'center',
   },
   authButton: {
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 20,
@@ -1070,13 +1070,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   errorBox: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FBE7E5',
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
   },
   errorText: {
-    color: '#DC2626',
+    color: '#D8463E',
     fontSize: 14,
   },
 });

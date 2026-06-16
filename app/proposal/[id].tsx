@@ -8,7 +8,6 @@ import { supabase, Proposal } from '@/lib/supabase';
 import { ArrowLeft, MessageCircle, CheckCircle, XCircle, Send, Lightbulb, FileText } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
-import { BottomNav } from '@/components/BottomNav';
 import { ChatWindow } from '@/components/ChatWindow';
 import { FormInput } from '@/components/ui/FormInput';
 import { counterProposalSchema, CounterProposalFormData } from '@/lib/validations/proposal';
@@ -96,7 +95,6 @@ export default function ProposalDetailScreen() {
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-        <BottomNav />
       </SafeAreaView>
     );
   }
@@ -114,7 +112,6 @@ export default function ProposalDetailScreen() {
         <View style={styles.centerContainer}>
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{error || 'Proposition non trouvée'}</Text>
         </View>
-        <BottomNav />
       </SafeAreaView>
     );
   }
@@ -481,7 +478,6 @@ export default function ProposalDetailScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <BottomNav />
     </SafeAreaView>
   );
 }
@@ -648,13 +644,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   acceptButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#1B9A5F',
   },
   counterButton: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#F8C61E',
   },
   refuseButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#D8463E',
   },
   counterForm: {
     padding: 16,

@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
-import { BottomNav } from '@/components/BottomNav';
 import { Shield, Users, Flag, AlertTriangle, Loader2, Trash2, CheckCircle, XCircle, Eye, BarChart3, Download, Gavel } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -218,7 +217,6 @@ export default function AdminScreen() {
           <Text style={[styles.accessDeniedTitle, { color: colors.text }]}>Accès refusé</Text>
           <Text style={[styles.accessDeniedText, { color: colors.textSecondary }]}>Cette page est réservée aux administrateurs.</Text>
         </View>
-        <BottomNav />
       </SafeAreaView>
     );
   }
@@ -272,7 +270,7 @@ export default function AdminScreen() {
 
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#19ADFA" />
+          <ActivityIndicator size="large" color="#2B86CC" />
         </View>
       ) : (
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
@@ -316,14 +314,14 @@ export default function AdminScreen() {
                           style={styles.reportActionButton}
                           onPress={() => handleReportStatus(report.id, 'resolved')}
                         >
-                          <CheckCircle size={16} color="#10B981" />
+                          <CheckCircle size={16} color="#1B9A5F" />
                           <Text style={styles.reportActionText}>Résolu</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.reportActionButton}
                           onPress={() => handleReportStatus(report.id, 'dismissed')}
                         >
-                          <XCircle size={16} color="#64748B" />
+                          <XCircle size={16} color="#3C4856" />
                           <Text style={styles.reportActionText}>Rejeter</Text>
                         </TouchableOpacity>
                       </View>
@@ -361,13 +359,13 @@ export default function AdminScreen() {
                         style={styles.verificationApproveButton}
                         onPress={() => handleVerification(req.id, 'verified')}
                       >
-                        <CheckCircle size={20} color="#10B981" />
+                        <CheckCircle size={20} color="#1B9A5F" />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.verificationRejectButton}
                         onPress={() => handleVerification(req.id, 'rejected')}
                       >
-                        <XCircle size={20} color="#EF4444" />
+                        <XCircle size={20} color="#D8463E" />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -394,7 +392,7 @@ export default function AdminScreen() {
               {users.map((u) => (
                 <View key={u.id} style={styles.userCard}>
                   <View style={styles.userInfo}>
-                    {u.is_verified && <CheckCircle size={16} color="#19ADFA" />}
+                    {u.is_verified && <CheckCircle size={16} color="#2B86CC" />}
                     <Text style={styles.userName}>{u.display_name}</Text>
                     <Text style={styles.userUsername}>@{u.username}</Text>
                   </View>
@@ -488,7 +486,7 @@ export default function AdminScreen() {
                     onPress={() => removeBannedWord(w.id)}
                     disabled={bannedWordsLoading}
                   >
-                    <Trash2 size={16} color="#EF4444" />
+                    <Trash2 size={16} color="#D8463E" />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -591,7 +589,6 @@ export default function AdminScreen() {
         </ScrollView>
       )}
 
-      <BottomNav />
     </SafeAreaView>
   );
 }
@@ -599,7 +596,7 @@ export default function AdminScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
   },
   centerContainer: {
     flex: 1,
@@ -619,11 +616,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1E293B',
+    color: '#13202E',
   },
   subtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#3C4856',
   },
   tabsScroll: {
     maxHeight: 60,
@@ -640,17 +637,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     backgroundColor: '#FFF',
   },
   tabActive: {
-    backgroundColor: '#19ADFA',
-    borderColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
+    borderColor: '#2B86CC',
   },
   tabText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#3C4856',
   },
   tabTextActive: {
     color: '#FFF',
@@ -667,7 +664,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#64748B',
+    color: '#3C4856',
     textAlign: 'center',
     paddingVertical: 48,
   },
@@ -676,7 +673,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
   },
   reportHeader: {
     flexDirection: 'row',
@@ -688,36 +685,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#FCF1CC',
   },
   reportBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#92400E',
+    color: '#BC840F',
   },
   reportTypeBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#E4F0F9',
   },
   reportTypeText: {
     fontSize: 11,
-    color: '#19ADFA',
+    color: '#2B86CC',
   },
   reportReason: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#13202E',
     marginBottom: 8,
   },
   reportDetails: {
     fontSize: 14,
-    color: '#64748B',
+    color: '#3C4856',
     marginBottom: 12,
   },
   reportListing: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
     padding: 12,
     borderRadius: 12,
     marginBottom: 12,
@@ -725,16 +722,16 @@ const styles = StyleSheet.create({
   reportListingTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#13202E',
     marginBottom: 4,
   },
   reportListingStatus: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#3C4856',
   },
   reportMeta: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#7B8896',
     marginBottom: 12,
   },
   reportActions: {
@@ -750,20 +747,20 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     backgroundColor: '#FFF',
   },
   reportActionText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#3C4856',
   },
   verificationCard: {
     backgroundColor: '#FFF',
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -783,7 +780,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#2B86CC',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -798,12 +795,12 @@ const styles = StyleSheet.create({
   verificationName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#13202E',
     marginBottom: 4,
   },
   verificationEmail: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#3C4856',
   },
   verificationActions: {
     flexDirection: 'row',
@@ -813,7 +810,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#DCF2E5',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -821,7 +818,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FBE7E5',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -834,7 +831,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     borderRadius: 20,
     padding: 12,
     fontSize: 15,
@@ -842,7 +839,7 @@ const styles = StyleSheet.create({
   searchButton: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     borderRadius: 20,
   },
   searchButtonText: {
@@ -855,7 +852,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     marginBottom: 12,
   },
   userInfo: {
@@ -867,11 +864,11 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#13202E',
   },
   userUsername: {
     fontSize: 14,
-    color: '#64748B',
+    color: '#3C4856',
   },
   userRoleContainer: {
     flexDirection: 'row',
@@ -880,7 +877,7 @@ const styles = StyleSheet.create({
   },
   userRoleLabel: {
     fontSize: 14,
-    color: '#64748B',
+    color: '#3C4856',
   },
   userRoleButtons: {
     flexDirection: 'row',
@@ -891,12 +888,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     backgroundColor: '#FFF',
   },
   userRoleButtonActive: {
-    backgroundColor: '#19ADFA',
-    borderColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
+    borderColor: '#2B86CC',
   },
   userRoleButtonDisabled: {
     opacity: 0.5,
@@ -904,7 +901,7 @@ const styles = StyleSheet.create({
   userRoleButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#3C4856',
   },
   userRoleButtonTextActive: {
     color: '#FFF',
@@ -919,7 +916,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     borderRadius: 20,
     padding: 12,
     fontSize: 15,
@@ -933,17 +930,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     backgroundColor: '#FFF',
   },
   severityButtonActive: {
-    backgroundColor: '#19ADFA',
-    borderColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
+    borderColor: '#2B86CC',
   },
   severityButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#3C4856',
   },
   severityButtonTextActive: {
     color: '#FFF',
@@ -951,7 +948,7 @@ const styles = StyleSheet.create({
   addWordButton: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     borderRadius: 20,
   },
   addWordButtonText: {
@@ -967,7 +964,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     marginBottom: 12,
   },
   bannedWordInfo: {
@@ -979,21 +976,21 @@ const styles = StyleSheet.create({
   bannedWordText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#13202E',
   },
   bannedWordSeverity: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#FCF1CC',
   },
   bannedWordSeverityBlock: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FBE7E5',
   },
   bannedWordSeverityText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#92400E',
+    color: '#BC840F',
   },
   removeWordButton: {
     padding: 8,
@@ -1003,7 +1000,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     marginBottom: 12,
   },
   disputeHeader: {
@@ -1016,32 +1013,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FBE7E5',
   },
   disputeStatusBadgeResolved: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#DCF2E5',
   },
   disputeStatusBadgeOpen: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FBE7E5',
   },
   disputeStatusText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#991B1B',
+    color: '#D8463E',
   },
   disputeDate: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#3C4856',
   },
   disputeReason: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#13202E',
     marginBottom: 8,
   },
   disputeOpenedBy: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#3C4856',
     marginBottom: 12,
   },
   disputeActions: {
@@ -1053,24 +1050,24 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     backgroundColor: '#FFF',
     alignItems: 'center',
   },
   disputeResolveButton: {
-    backgroundColor: '#D1FAE5',
-    borderColor: '#10B981',
+    backgroundColor: '#DCF2E5',
+    borderColor: '#1B9A5F',
   },
   disputeResolveText: {
-    color: '#059669',
+    color: '#1B9A5F',
   },
   disputeDismissButton: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
   },
   disputeActionText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#3C4856',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -1083,32 +1080,32 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     alignItems: 'center',
   },
   statValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#19ADFA',
+    color: '#2B86CC',
     marginBottom: 8,
   },
   statValueSuccess: {
-    color: '#10B981',
+    color: '#1B9A5F',
   },
   statLabel: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#3C4856',
   },
   accessDeniedTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#13202E',
     marginTop: 16,
     marginBottom: 8,
   },
   accessDeniedText: {
     fontSize: 14,
-    color: '#64748B',
+    color: '#3C4856',
     textAlign: 'center',
   },
 });

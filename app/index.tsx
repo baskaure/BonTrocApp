@@ -55,7 +55,7 @@ export default function HomeScreen() {
   if (authLoading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#19ADFA" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -149,7 +149,7 @@ export default function HomeScreen() {
 
         {loading ? (
           <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#19ADFA" />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : listings.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -165,12 +165,11 @@ export default function HomeScreen() {
         ) : (
           <View style={styles.listingsGrid}>
             {listings.map((listing) => (
-              <View key={listing.id} style={styles.listingCardWrapper}>
-                <ListingCard
-                  listing={listing}
-                  onPress={() => router.push(`/listing/${listing.id}`)}
-                />
-              </View>
+              <ListingCard
+                key={listing.id}
+                listing={listing}
+                onPress={() => router.push(`/listing/${listing.id}`)}
+              />
             ))}
           </View>
         )}
@@ -259,13 +258,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   listingsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: 'column',
     paddingBottom: 16,
-  },
-  listingCardWrapper: {
-    width: '50%',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
   },
 });

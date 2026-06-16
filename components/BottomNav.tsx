@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
-import { Grid, List, Package } from 'lucide-react-native';
+import { Compass, FileText, ArrowLeftRight, Plus } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNotificationBadges } from '@/hooks/useNotificationBadges';
 
@@ -11,7 +11,7 @@ export const BottomNav = React.memo(() => {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
-  const { colors } = useTheme();
+  const { colors, radius, shadows } = useTheme();
   const badges = useNotificationBadges();
 
   const isActive = useCallback((path: string) => {
@@ -44,8 +44,8 @@ export const BottomNav = React.memo(() => {
           onPress={() => navigate('/')}
           activeOpacity={0.7}
         >
-          <Grid size={24} color={activeStates.home ? colors.primary : colors.textSecondary} />
-          <Text style={[styles.navButtonText, { color: activeStates.home ? colors.primary : colors.textSecondary }, activeStates.home && styles.navButtonTextActive]}>
+          <Compass size={23} color={activeStates.home ? colors.primary : colors.textTertiary} />
+          <Text style={[styles.navButtonText, { color: activeStates.home ? colors.primary : colors.textTertiary }]}>
             Annonces
           </Text>
         </TouchableOpacity>
@@ -56,17 +56,33 @@ export const BottomNav = React.memo(() => {
           activeOpacity={0.7}
         >
           <View style={styles.iconContainer}>
-            <List size={24} color={activeStates.proposals ? colors.primary : colors.textSecondary} />
+            <FileText size={23} color={activeStates.proposals ? colors.primary : colors.textTertiary} />
             {badges.proposals > 0 && (
-              <View style={[styles.badge, { backgroundColor: '#EF4444', borderColor: colors.background }]}>
+              <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.surface }]}>
                 <Text style={styles.badgeText}>{badges.proposals > 9 ? '9+' : String(badges.proposals)}</Text>
               </View>
             )}
           </View>
-          <Text style={[styles.navButtonText, { color: activeStates.proposals ? colors.primary : colors.textSecondary }, activeStates.proposals && styles.navButtonTextActive]}>
+          <Text style={[styles.navButtonText, { color: activeStates.proposals ? colors.primary : colors.textTertiary }]}>
             Propositions
           </Text>
         </TouchableOpacity>
+
+        {/* Bouton central : créer une annonce */}
+        <View style={styles.centerSlot} pointerEvents="box-none">
+          <TouchableOpacity
+            style={[
+              styles.centerButton,
+              { backgroundColor: colors.primary, borderColor: colors.surface, borderRadius: radius.lg + 2 },
+              shadows.card,
+              { shadowColor: colors.primary },
+            ]}
+            onPress={() => router.push('/listing/create')}
+            activeOpacity={0.85}
+          >
+            <Plus size={26} color={colors.onPrimary} strokeWidth={2.4} />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={styles.navButton}
@@ -74,14 +90,14 @@ export const BottomNav = React.memo(() => {
           activeOpacity={0.7}
         >
           <View style={styles.iconContainer}>
-            <Package size={24} color={activeStates.exchanges ? colors.primary : colors.textSecondary} />
+            <ArrowLeftRight size={23} color={activeStates.exchanges ? colors.primary : colors.textTertiary} />
             {badges.exchanges > 0 && (
-              <View style={[styles.badge, { backgroundColor: '#EF4444', borderColor: colors.background }]}>
+              <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.surface }]}>
                 <Text style={styles.badgeText}>{badges.exchanges > 9 ? '9+' : String(badges.exchanges)}</Text>
               </View>
             )}
           </View>
-          <Text style={[styles.navButtonText, { color: activeStates.exchanges ? colors.primary : colors.textSecondary }, activeStates.exchanges && styles.navButtonTextActive]}>
+          <Text style={[styles.navButtonText, { color: activeStates.exchanges ? colors.primary : colors.textTertiary }]}>
             Échanges
           </Text>
         </TouchableOpacity>
@@ -92,15 +108,17 @@ export const BottomNav = React.memo(() => {
           activeOpacity={0.7}
         >
           {user.avatar_url ? (
-            <Image source={{ uri: user.avatar_url }} style={[styles.profileAvatar, { borderColor: colors.border }]} />
+            <Image source={{ uri: user.avatar_url }} style={[styles.profileAvatar, { borderColor: activeStates.profile ? colors.primary : colors.border }]} />
           ) : (
-            <View style={[styles.profileAvatarPlaceholder, { borderColor: colors.border }]}>
-              <Text style={styles.profileAvatarText}>
+            <View style={[styles.profileAvatarPlaceholder, { backgroundColor: colors.primary, borderColor: activeStates.profile ? colors.primary : colors.border }]}>
+              <Text style={[styles.profileAvatarText, { color: colors.onPrimary }]}>
                 {user.display_name[0]?.toUpperCase() || 'U'}
               </Text>
             </View>
           )}
-          {activeStates.profile && <View style={[styles.activeIndicator, { backgroundColor: colors.primary }]} />}
+          <Text style={[styles.navButtonText, { color: activeStates.profile ? colors.primary : colors.textTertiary }]}>
+            Profil
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -114,15 +132,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 1000,
-    // backgroundColor will be set dynamically
   },
   container: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 8,
+    paddingHorizontal: 14,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   navButton: {
     alignItems: 'center',
@@ -131,39 +149,39 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   navButtonText: {
-    fontSize: 11,
+    fontSize: 10,
+    fontWeight: '700',
   },
-  navButtonTextActive: {
-    fontWeight: '600',
+  centerSlot: {
+    flex: 0,
+    width: 64,
+    alignItems: 'center',
+  },
+  centerButton: {
+    width: 56,
+    height: 56,
+    marginTop: -26,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   profileAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 2,
   },
   profileAvatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F59E0B',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
   },
   profileAvatarText: {
-    color: '#FFF',
     fontWeight: 'bold',
-    fontSize: 16,
-  },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: -2,
-    left: '50%',
-    marginLeft: -4,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    fontSize: 13,
   },
   iconContainer: {
     position: 'relative',
@@ -179,7 +197,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#FFF',
   },
   badgeText: {
     color: '#FFF',
@@ -187,4 +204,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-

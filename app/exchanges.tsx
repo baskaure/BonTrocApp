@@ -156,8 +156,8 @@ export default function ExchangesScreen() {
             key={status}
             style={[
               styles.filterButton,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-              filterStatus === status && { backgroundColor: colors.primaryLight, borderColor: colors.primary },
+              { backgroundColor: colors.surfaceContainer, borderColor: 'transparent' },
+              filterStatus === status && { backgroundColor: colors.primary, borderColor: colors.primary },
             ]}
             onPress={() => setFilterStatus(status)}
           >
@@ -165,7 +165,7 @@ export default function ExchangesScreen() {
               style={[
                 styles.filterButtonText,
                 { color: colors.textSecondary },
-                filterStatus === status && { color: colors.primary, fontWeight: '700' },
+                filterStatus === status && { color: colors.onPrimary, fontWeight: '700' },
               ]}
             >
               {status === 'all' ? 'Tous' :
@@ -241,10 +241,10 @@ export default function ExchangesScreen() {
                       </Text>
                     </View>
                   </View>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(exchange.status) + '20' }]}>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(exchange.status) + '22' }]}>
                     {getStatusIcon(exchange.status)}
                     <Text style={[styles.statusText, { color: getStatusColor(exchange.status) }]}>
-                      {getStatusText(exchange.status)}
+                      {getStatusText(exchange.status).toUpperCase()}
                     </Text>
                   </View>
                 </View>

@@ -4,8 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
-import { BottomNav } from '@/components/BottomNav';
-import { Lock, Bell, Shield, Trash2, AlertTriangle } from 'lucide-react-native';
+import { Lock, Bell, Shield, AlertTriangle } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SettingsScreen() {
@@ -143,14 +142,14 @@ export default function SettingsScreen() {
 
         <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.sectionHeader}>
-            <Lock size={24} color={colors.primary} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Sécurité</Text>
+            <Lock size={15} color={colors.primary} />
+            <Text style={[styles.sectionTitle, { color: colors.primary }]}>SÉCURITÉ DU COMPTE</Text>
           </View>
 
           <View style={styles.formGroup}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>Nouveau mot de passe</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
               value={passwordData.newPassword}
               onChangeText={(text) => setPasswordData({ ...passwordData, newPassword: text })}
               placeholder="Minimum 6 caractères"
@@ -162,7 +161,7 @@ export default function SettingsScreen() {
           <View style={styles.formGroup}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>Confirmer le mot de passe</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
               value={passwordData.confirmPassword}
               onChangeText={(text) => setPasswordData({ ...passwordData, confirmPassword: text })}
               placeholder="Retapez votre mot de passe"
@@ -186,8 +185,8 @@ export default function SettingsScreen() {
 
         <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.sectionHeader}>
-            <Bell size={24} color={colors.primary} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Notifications</Text>
+            <Bell size={15} color={colors.primary} />
+            <Text style={[styles.sectionTitle, { color: colors.primary }]}>NOTIFICATIONS</Text>
           </View>
 
           <View style={styles.notificationItem}>
@@ -200,7 +199,7 @@ export default function SettingsScreen() {
             <Switch
               value={notificationSettings.emailNewProposal}
               onValueChange={() => handleNotificationToggle('emailNewProposal')}
-              trackColor={{ false: '#CBD5E1', true: '#19ADFA' }}
+              trackColor={{ false: '#CBD5E1', true: '#2B86CC' }}
             />
           </View>
 
@@ -214,7 +213,7 @@ export default function SettingsScreen() {
             <Switch
               value={notificationSettings.emailAcceptedProposal}
               onValueChange={() => handleNotificationToggle('emailAcceptedProposal')}
-              trackColor={{ false: '#CBD5E1', true: '#19ADFA' }}
+              trackColor={{ false: '#CBD5E1', true: '#2B86CC' }}
             />
           </View>
 
@@ -228,7 +227,7 @@ export default function SettingsScreen() {
             <Switch
               value={notificationSettings.emailNewMessage}
               onValueChange={() => handleNotificationToggle('emailNewMessage')}
-              trackColor={{ false: '#CBD5E1', true: '#19ADFA' }}
+              trackColor={{ false: '#CBD5E1', true: '#2B86CC' }}
             />
           </View>
 
@@ -242,15 +241,15 @@ export default function SettingsScreen() {
             <Switch
               value={notificationSettings.emailWeeklyDigest}
               onValueChange={() => handleNotificationToggle('emailWeeklyDigest')}
-              trackColor={{ false: '#CBD5E1', true: '#19ADFA' }}
+              trackColor={{ false: '#CBD5E1', true: '#2B86CC' }}
             />
           </View>
         </View>
 
         <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.sectionHeader}>
-            <Shield size={24} color={colors.primary} />
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Confidentialité</Text>
+            <Shield size={15} color={colors.primary} />
+            <Text style={[styles.sectionTitle, { color: colors.primary }]}>CONFIDENTIALITÉ</Text>
           </View>
 
           <View style={styles.privacyItem}>
@@ -269,19 +268,24 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <View style={[styles.section, styles.dangerSection, { backgroundColor: colors.surface, borderColor: colors.error }]}>
+        <View style={[styles.section, { backgroundColor: colors.errorLight, borderColor: colors.error }]}>
           <View style={styles.sectionHeader}>
-            <Trash2 size={24} color={colors.error} />
-            <Text style={[styles.sectionTitle, styles.dangerTitle, { color: colors.text }]}>Zone dangereuse</Text>
+            <AlertTriangle size={15} color={colors.error} />
+            <Text style={[styles.sectionTitle, { color: colors.error }]}>ZONE SENSIBLE</Text>
           </View>
-
           {!showDeleteConfirm ? (
-            <TouchableOpacity
-              style={[styles.deleteButton, { backgroundColor: colors.error }]}
-              onPress={() => setShowDeleteConfirm(true)}
-            >
-              <Text style={[styles.deleteButtonText, { color: '#FFF' }]}>Supprimer mon compte</Text>
-            </TouchableOpacity>
+            <>
+              <Text style={[styles.dangerHeading, { color: colors.error }]}>Supprimer mon compte</Text>
+              <Text style={[styles.dangerDescription, { color: colors.error }]}>
+                Action définitive : annonces, messages et historique seront supprimés.
+              </Text>
+              <TouchableOpacity
+                style={[styles.deleteButton, { backgroundColor: colors.error }]}
+                onPress={() => setShowDeleteConfirm(true)}
+              >
+                <Text style={[styles.deleteButtonText, { color: '#FFF' }]}>Supprimer mon compte</Text>
+              </TouchableOpacity>
+            </>
           ) : (
             <View style={styles.deleteConfirm}>
               <View style={[styles.deleteWarning, { backgroundColor: colors.errorLight }]}>
@@ -317,8 +321,6 @@ export default function SettingsScreen() {
           )}
         </View>
       </ScrollView>
-
-      <BottomNav />
     </SafeAreaView>
   );
 }
@@ -373,12 +375,24 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  dangerHeading: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 5,
+  },
+  dangerDescription: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginBottom: 14,
+    opacity: 0.85,
   },
   formGroup: {
     marginBottom: 16,
@@ -409,7 +423,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#E7EDF3',
   },
   notificationInfo: {
     flex: 1,
@@ -437,6 +451,10 @@ const styles = StyleSheet.create({
   },
   privacyButton: {
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 13,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   privacyButtonText: {
     fontSize: 14,
@@ -482,7 +500,7 @@ const styles = StyleSheet.create({
   },
   deleteConfirmButton: {
     flex: 1,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#D8463E',
     padding: 16,
     borderRadius: 20,
     alignItems: 'center',
@@ -494,19 +512,19 @@ const styles = StyleSheet.create({
   },
   deleteCancelButton: {
     flex: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#E7EDF3',
     padding: 16,
     borderRadius: 20,
     alignItems: 'center',
   },
   deleteCancelButtonText: {
-    color: '#475569',
+    color: '#3C4856',
     fontSize: 16,
     fontWeight: '600',
   },
   emptyText: {
     fontSize: 16,
-    color: '#64748B',
+    color: '#3C4856',
     textAlign: 'center',
   },
 });

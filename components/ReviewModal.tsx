@@ -116,7 +116,7 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
       >
         <View style={styles.overlay}>
           <View style={styles.successModal}>
-            <CheckCircle size={64} color="#10B981" />
+            <CheckCircle size={64} color="#1B9A5F" />
             <Text style={styles.successTitle}>Merci pour votre avis !</Text>
             <Text style={styles.successText}>
               Votre retour a été publié avec succès et aide la communauté BonTroc.
@@ -139,7 +139,7 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
           <View style={styles.header}>
             <Text style={styles.title}>Laisser un avis</Text>
             <TouchableOpacity onPress={onClose}>
-              <X size={24} color="#64748B" />
+              <X size={24} color="#3C4856" />
             </TouchableOpacity>
           </View>
 
@@ -159,8 +159,8 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
                   >
                     <Star
                       size={40}
-                      color={star <= rating ? '#F59E0B' : '#CBD5E1'}
-                      fill={star <= rating ? '#F59E0B' : 'transparent'}
+                      color={star <= rating ? '#F8C61E' : '#CBD5E1'}
+                      fill={star <= rating ? '#F8C61E' : 'transparent'}
                     />
                   </TouchableOpacity>
                 ))}
@@ -264,24 +264,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#E7EDF3',
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1E293B',
+    color: '#13202E',
   },
   scrollView: {
     padding: 20,
   },
   description: {
     fontSize: 15,
-    color: '#64748B',
+    color: '#3C4856',
     marginBottom: 24,
   },
   bold: {
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#13202E',
   },
   ratingSection: {
     marginBottom: 24,
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#475569',
+    color: '#3C4856',
     marginBottom: 12,
   },
   stars: {
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#13202E',
     marginLeft: 12,
   },
   tagsSection: {
@@ -319,16 +319,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#E7EDF3',
+    backgroundColor: '#EEF2F6',
   },
   tagSelected: {
-    backgroundColor: '#19ADFA',
-    borderColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
+    borderColor: '#2B86CC',
   },
   tagText: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#3C4856',
     fontWeight: '600',
   },
   tagTextSelected: {
@@ -338,29 +338,29 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   textArea: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     borderRadius: 12,
     padding: 12,
     fontSize: 15,
     minHeight: 100,
     textAlignVertical: 'top',
     marginBottom: 8,
-    color: '#1E293B',
+    color: '#13202E',
   },
   hint: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#7B8896',
   },
   errorBox: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FBE7E5',
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   errorText: {
-    color: '#DC2626',
+    color: '#D8463E',
     fontSize: 14,
   },
   footer: {
@@ -368,24 +368,24 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#E7EDF3',
   },
   cancelButton: {
     flex: 1,
     padding: 16,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     alignItems: 'center',
   },
   cancelButtonText: {
-    color: '#64748B',
+    color: '#3C4856',
     fontSize: 16,
     fontWeight: '600',
   },
   submitButton: {
     flex: 1,
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     padding: 16,
     borderRadius: 20,
     alignItems: 'center',
@@ -408,13 +408,13 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#1E293B',
+    color: '#13202E',
     marginTop: 16,
     marginBottom: 8,
   },
   successText: {
     fontSize: 14,
-    color: '#64748B',
+    color: '#3C4856',
     textAlign: 'center',
   },
 });

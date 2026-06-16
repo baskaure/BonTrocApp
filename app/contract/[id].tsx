@@ -9,7 +9,6 @@ import { useTheme } from '@/lib/theme';
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { BottomNav } from '@/components/BottomNav';
 
 export default function ContractScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -90,7 +89,6 @@ export default function ContractScreen() {
           <View style={styles.centerContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
-          <BottomNav />
         </SafeAreaView>
       );
     }
@@ -107,7 +105,6 @@ export default function ContractScreen() {
         <View style={styles.centerContainer}>
           <Text style={[styles.errorText, { color: colors.error }]}>{error || 'Contrat introuvable'}</Text>
         </View>
-        <BottomNav />
       </SafeAreaView>
     );
   }
@@ -363,7 +360,6 @@ export default function ContractScreen() {
         </View>
       </ScrollView>
 
-      <BottomNav />
     </SafeAreaView>
   );
 }

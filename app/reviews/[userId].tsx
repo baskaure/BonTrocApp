@@ -4,7 +4,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { supabase, Review, User } from '@/lib/supabase';
-import { BottomNav } from '@/components/BottomNav';
 import { ArrowLeft, Star } from 'lucide-react-native';
 import { TouchableOpacity } from 'react-native';
 import { Image } from 'react-native';
@@ -208,7 +207,6 @@ export default function ReviewsScreen() {
           </View>
         </ScrollView>
       )}
-      <BottomNav />
     </SafeAreaView>
   );
 }

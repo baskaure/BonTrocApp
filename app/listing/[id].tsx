@@ -8,7 +8,6 @@ import { useAuth } from '@/lib/auth-context';
 import { supabase, Listing } from '@/lib/supabase';
 import { ArrowLeft, MapPin, Star, TrendingUp, Sparkles, Shield, MessageCircle, Pencil, Trash2, Calendar, Flag } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BottomNav } from '@/components/BottomNav';
 import { ReportModal } from '@/components/ReportModal';
 import { FormInput } from '@/components/ui/FormInput';
 import { proposalSchema, ProposalFormData } from '@/lib/validations/proposal';
@@ -310,7 +309,6 @@ export default function ListingDetailScreen() {
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-        <BottomNav />
       </SafeAreaView>
     );
   }
@@ -325,7 +323,6 @@ export default function ListingDetailScreen() {
         <View style={styles.centerContainer}>
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Annonce non trouvée</Text>
         </View>
-        <BottomNav />
       </SafeAreaView>
     );
   }
@@ -754,8 +751,6 @@ export default function ListingDetailScreen() {
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
 
-      <BottomNav />
-
       <ReportModal
         visible={showReportModal}
         onClose={() => setShowReportModal(false)}
@@ -878,7 +873,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#2B86CC',
     alignItems: 'center',
     justifyContent: 'center',
   },

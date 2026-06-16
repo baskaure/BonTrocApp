@@ -417,7 +417,7 @@ export default function AuthScreen() {
           disabled={googleLoading}
         >
           {googleLoading ? (
-            <ActivityIndicator color="#475569" />
+            <ActivityIndicator color="#3C4856" />
           ) : (
             <>
               <GoogleIcon />
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   submitButton: {
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     padding: 16,
     borderRadius: 20,
     alignItems: 'center',

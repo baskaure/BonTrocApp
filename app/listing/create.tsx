@@ -8,7 +8,6 @@ import { useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 import { ArrowLeft, Upload, X } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BottomNav } from '@/components/BottomNav';
 import { FormInput } from '@/components/ui/FormInput';
 import { createListingSchema, CreateListingFormData } from '@/lib/validations/listing';
 import * as ImagePicker from 'expo-image-picker';
@@ -348,7 +347,6 @@ export default function CreateListingScreen() {
         </TouchableOpacity>
       </View>
 
-      <BottomNav />
     </SafeAreaView>
   );
 }

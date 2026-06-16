@@ -24,6 +24,9 @@ export default function LandingScreen() {
               resizeMode="contain"
             />
           </View>
+          <View style={[styles.badge, { backgroundColor: colors.primaryLight }]}>
+            <Text style={[styles.badgeText, { color: colors.primary }]}>L'ÉCONOMIE CIRCULAIRE, VERSION PRO</Text>
+          </View>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Trouve le bon troc{'\n'}qui peut faire la différence
           </Text>
@@ -57,11 +60,11 @@ export default function LandingScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.secondaryButton}
+            style={[styles.secondaryButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={() => router.push({ pathname: '/auth', params: { mode: 'login' } })}
             activeOpacity={0.8}
           >
-            <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>
+            <Text style={[styles.secondaryButtonText, { color: colors.primary }]}>
               J'ai déjà un compte
             </Text>
           </TouchableOpacity>
@@ -106,11 +109,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: -1,
   },
+  badge: {
+    marginTop: -10,
+    marginBottom: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  badgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
   subtitle: {
     fontSize: 18,
     textAlign: 'center',
     lineHeight: 26,
-    marginTop: -20,
     marginBottom: 48,
   },
   quickFeatures: {
@@ -138,7 +152,7 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 28,
-    shadowColor: '#19ADFA',
+    shadowColor: '#2B86CC',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -153,9 +167,11 @@ const styles = StyleSheet.create({
   secondaryButton: {
     paddingVertical: 16,
     alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1.5,
   },
   secondaryButtonText: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '700',
   },
 });

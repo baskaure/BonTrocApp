@@ -244,7 +244,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.profileCard}>
+        <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.bannerContainer}>
             {formValues.banner_url ? (
               <Image 
@@ -573,28 +573,22 @@ export default function ProfileScreen() {
               </View>
 
               <View style={[styles.statsSection, { borderTopColor: colors.border }]}>
-                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Statistiques</Text>
-                <View style={styles.stats}>
-                  <View style={styles.stat}>
-                    <Text style={[styles.statValue, { color: colors.text }]}>{listingsCount}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Annonces</Text>
+                <View style={styles.statsCards}>
+                  <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Text style={[styles.statCardValue, { color: colors.primary }]}>{listingsCount}</Text>
+                    <Text style={[styles.statCardLabel, { color: colors.textTertiary }]}>ANNONCES</Text>
                   </View>
-                  <View style={styles.stat}>
-                    <Text style={[styles.statValue, { color: colors.text }]}>{reviews.length}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Avis reçus</Text>
+                  <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Text style={[styles.statCardValue, { color: colors.primary }]}>{reviews.length}</Text>
+                    <Text style={[styles.statCardLabel, { color: colors.textTertiary }]}>AVIS</Text>
                   </View>
-                  <View style={styles.stat}>
-                    {reviews.length > 0 ? (
-                      <View style={styles.statRating}>
-                        <Star size={20} color={colors.secondary} fill={colors.secondary} />
-                        <Text style={[styles.statValue, { color: colors.text }]}>
-                          {(reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)}
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text style={[styles.statValue, { color: colors.text }]}>-</Text>
-                    )}
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Note moyenne</Text>
+                  <View style={[styles.statCard, styles.statCardAccent, { backgroundColor: colors.secondary }]}>
+                    <Text style={[styles.statCardValue, { color: colors.onSecondary }]}>
+                      {reviews.length > 0
+                        ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+                        : '-'}
+                    </Text>
+                    <Text style={[styles.statCardLabel, { color: colors.onSecondary }]}>NOTE</Text>
                   </View>
                 </View>
               </View>
@@ -742,7 +736,7 @@ const styles = StyleSheet.create({
   bannerPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
   },
   bannerEditButton: {
     position: 'absolute',
@@ -787,7 +781,7 @@ const styles = StyleSheet.create({
     width: 128,
     height: 128,
     borderRadius: 64,
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#2B86CC',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
@@ -805,7 +799,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -1045,25 +1039,29 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
   },
-  stats: {
+  statsCards: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    gap: 10,
   },
-  stat: {
+  statCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 15,
+    paddingVertical: 14,
     alignItems: 'center',
   },
-  statRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  statCardAccent: {
+    borderWidth: 0,
   },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
+  statCardValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 2,
   },
-  statLabel: {
-    fontSize: 12,
+  statCardLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   reviewsSection: {
     padding: 16,
@@ -1106,7 +1104,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#2B86CC',
     alignItems: 'center',
     justifyContent: 'center',
   },

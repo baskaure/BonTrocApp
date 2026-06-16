@@ -255,14 +255,14 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
           <View style={styles.header}>
             <Text style={styles.title}>Suivi de l'échange</Text>
             <TouchableOpacity onPress={onClose}>
-              <X size={24} color="#64748B" />
+              <X size={24} color="#3C4856" />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
             {error && (
               <View style={styles.errorBox}>
-                <AlertCircle size={20} color="#EF4444" />
+                <AlertCircle size={20} color="#D8463E" />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
@@ -311,7 +311,7 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
 
             {exchange.due_date && (
               <View style={styles.dueDateBox}>
-                <Clock size={20} color="#19ADFA" />
+                <Clock size={20} color="#2B86CC" />
                 <View>
                   <Text style={styles.dueDateLabel}>Date limite</Text>
                   <Text style={styles.dueDateText}>
@@ -328,8 +328,8 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
 
             <View style={styles.actions}>
               {exchange.status === 'not_started' && !contractIsActive && (
-                <View style={[styles.warningBox, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
-                  <Text style={[styles.warningText, { color: '#92400E' }]}>
+                <View style={[styles.warningBox, { backgroundColor: '#FCF1CC', borderColor: '#F8C61E' }]}>
+                  <Text style={[styles.warningText, { color: '#BC840F' }]}>
                     Le contrat doit être signé par les deux parties avant de démarrer l'échange.
                   </Text>
                 </View>
@@ -426,14 +426,14 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
 
               {exchange.contract && (
                 <TouchableOpacity
-                  style={[styles.contractButton, { backgroundColor: '#F0F9FF', borderColor: '#0EA5E9' }]}
+                  style={[styles.contractButton, { backgroundColor: '#E4F0F9', borderColor: '#2B86CC' }]}
                   onPress={() => {
                     onClose();
                     router.push(`/contract/${exchange.contract.id}`);
                   }}
                 >
-                  <FileText size={20} color="#0EA5E9" />
-                  <Text style={[styles.contractButtonText, { color: '#0EA5E9' }]}>
+                  <FileText size={20} color="#2B86CC" />
+                  <Text style={[styles.contractButtonText, { color: '#2B86CC' }]}>
                     Voir et signer le contrat
                   </Text>
                 </TouchableOpacity>
@@ -441,7 +441,7 @@ export function ExchangeTracker({ exchange, visible, onClose, onUpdate }: Exchan
 
               {exchange.dispute && (
                 <View style={styles.disputeInfo}>
-                  <AlertCircle size={20} color="#EF4444" />
+                  <AlertCircle size={20} color="#D8463E" />
                   <View>
                     <Text style={styles.disputeInfoTitle}>
                       Litige {exchange.dispute.status === 'resolved' ? 'résolu' : 'en cours'}
@@ -477,12 +477,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#E7EDF3',
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1E293B',
+    color: '#13202E',
   },
   scrollView: {
     padding: 20,
@@ -491,14 +491,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FBE7E5',
     padding: 12,
     borderRadius: 8,
     marginBottom: 20,
   },
   errorText: {
     flex: 1,
-    color: '#DC2626',
+    color: '#D8463E',
     fontSize: 14,
   },
   timeline: {
@@ -512,16 +512,16 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#E7EDF3',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
   },
   timelineIconCompleted: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#1B9A5F',
   },
   timelineIconCurrent: {
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
   },
   timelineContent: {
     flex: 1,
@@ -534,17 +534,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   timelineLabelActive: {
-    color: '#1E293B',
+    color: '#13202E',
   },
   timelineDate: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#3C4856',
   },
   dueDateBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#E4F0F9',
     padding: 16,
     borderRadius: 12,
     marginBottom: 24,
@@ -552,27 +552,27 @@ const styles = StyleSheet.create({
   dueDateLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#19ADFA',
+    color: '#2B86CC',
     marginBottom: 4,
   },
   dueDateText: {
     fontSize: 14,
-    color: '#1E293B',
+    color: '#13202E',
   },
   actions: {
     gap: 12,
   },
   actionButton: {
-    backgroundColor: '#19ADFA',
+    backgroundColor: '#2B86CC',
     padding: 16,
     borderRadius: 20,
     alignItems: 'center',
   },
   deliveredButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#1B9A5F',
   },
   confirmButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#1B9A5F',
   },
   actionButtonText: {
     color: '#FFF',
@@ -582,12 +582,12 @@ const styles = StyleSheet.create({
   disputeButton: {
     padding: 12,
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#D8463E',
     borderRadius: 20,
     alignItems: 'center',
   },
   disputeButtonText: {
-    color: '#EF4444',
+    color: '#D8463E',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -595,9 +595,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   disputeInput: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     borderRadius: 12,
     padding: 12,
     fontSize: 15,
@@ -613,17 +613,17 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     alignItems: 'center',
   },
   disputeCancelText: {
-    color: '#64748B',
+    color: '#3C4856',
     fontSize: 14,
     fontWeight: '600',
   },
   disputeSubmitButton: {
     flex: 1,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#D8463E',
     padding: 12,
     borderRadius: 20,
     alignItems: 'center',
@@ -651,19 +651,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FBE7E5',
     padding: 16,
     borderRadius: 12,
   },
   disputeInfoTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#DC2626',
+    color: '#D8463E',
     marginBottom: 4,
   },
   disputeInfoText: {
     fontSize: 14,
-    color: '#991B1B',
+    color: '#D8463E',
   },
   warningBox: {
     padding: 12,

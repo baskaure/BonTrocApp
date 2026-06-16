@@ -113,7 +113,7 @@ export default function AuthCallback() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#19ADFA" />
+      <ActivityIndicator size="large" color="#2B86CC" />
     </View>
   );
 }
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
   },
 });
 

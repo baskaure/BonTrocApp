@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#2B86CC',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -465,13 +465,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   acceptButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#1B9A5F',
   },
   counterButton: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#F8C61E',
   },
   refuseButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#D8463E',
   },
   actionButtonText: {
     color: '#FFF',

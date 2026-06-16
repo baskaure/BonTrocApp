@@ -111,18 +111,18 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
         <View style={styles.modal}>
           <View style={styles.header}>
             <View style={styles.headerTitle}>
-              <AlertTriangle size={20} color="#EF4444" />
+              <AlertTriangle size={20} color="#D8463E" />
               <Text style={styles.title}>{getTitle()}</Text>
             </View>
             <TouchableOpacity onPress={onClose}>
-              <X size={24} color="#64748B" />
+              <X size={24} color="#3C4856" />
             </TouchableOpacity>
           </View>
 
           {success ? (
             <View style={styles.successContainer}>
               <View style={styles.successIcon}>
-                <AlertTriangle size={32} color="#10B981" />
+                <AlertTriangle size={32} color="#1B9A5F" />
               </View>
               <Text style={styles.successTitle}>Signalement envoyé !</Text>
               <Text style={styles.successText}>Merci pour votre vigilance</Text>
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#E7EDF3',
   },
   headerTitle: {
     flexDirection: 'row',
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#EF4444',
+    color: '#D8463E',
   },
   scrollView: {
     padding: 20,
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#475569',
+    color: '#3C4856',
     marginBottom: 12,
   },
   reasons: {
@@ -251,11 +251,11 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
   },
   reasonItemSelected: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#EF4444',
+    backgroundColor: '#FBE7E5',
+    borderColor: '#D8463E',
   },
   radio: {
     width: 20,
@@ -267,30 +267,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radioSelected: {
-    borderColor: '#EF4444',
+    borderColor: '#D8463E',
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#D8463E',
   },
   reasonText: {
     flex: 1,
     fontSize: 15,
-    color: '#475569',
+    color: '#3C4856',
   },
   reasonTextSelected: {
-    color: '#991B1B',
+    color: '#D8463E',
     fontWeight: '600',
   },
   detailsSection: {
     marginBottom: 20,
   },
   textArea: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2F6',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     borderRadius: 12,
     padding: 12,
     fontSize: 15,
@@ -302,24 +302,24 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#E7EDF3',
   },
   cancelButton: {
     flex: 1,
     padding: 16,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E7EDF3',
     alignItems: 'center',
   },
   cancelButtonText: {
-    color: '#64748B',
+    color: '#3C4856',
     fontSize: 14,
     fontWeight: '600',
   },
   submitButton: {
     flex: 1,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#D8463E',
     padding: 16,
     borderRadius: 20,
     alignItems: 'center',
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#DCF2E5',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -348,12 +348,12 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#10B981',
+    color: '#1B9A5F',
     marginBottom: 8,
   },
   successText: {
     fontSize: 14,
-    color: '#64748B',
+    color: '#3C4856',
     textAlign: 'center',
   },
 });

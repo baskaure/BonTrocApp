@@ -4,7 +4,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { Proposal } from '@/lib/supabase';
-import { MessageCircle, Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react-native';
+import { MessageCircle, ChevronRight, ShieldCheck } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProposals } from '@/lib/store/hooks';
 import { supabase } from '@/lib/supabase';
@@ -80,31 +81,25 @@ export default function ProposalsScreen() {
     setTimeout(() => setRefreshing(false), 500);
   };
 
-  const getStatusIcon = (status: string) => {
+  const { colors, radius, shadows } = useTheme();
+
+  const getStatusChip = (status: string): { bg: string; fg: string; label: string } => {
     switch (status) {
       case 'accepted':
-        return <CheckCircle size={20} color="#10B981" />;
+        return { bg: colors.primaryLight, fg: colors.primary, label: 'ACCEPTÉE' };
       case 'refused':
-        return <XCircle size={20} color="#EF4444" />;
+        return { bg: colors.errorLight, fg: colors.error, label: 'REFUSÉE' };
       case 'countered':
-        return <RefreshCw size={20} color="#F59E0B" />;
+        return { bg: colors.secondaryLight, fg: colors.warning, label: 'CONTRE-PROP.' };
+      case 'cancelled':
+        return { bg: colors.surfaceContainer, fg: colors.textTertiary, label: 'ANNULÉE' };
       default:
-        return <Clock size={20} color="#19ADFA" />;
+        return { bg: colors.warningLight, fg: colors.warning, label: 'EN ATTENTE' };
     }
   };
 
-  const getStatusText = (status: string) => {
-    const statusMap: Record<string, string> = {
-      pending: 'En attente',
-      countered: 'Contre-proposition',
-      accepted: 'Acceptée',
-      refused: 'Refusée',
-      cancelled: 'Annulée',
-    };
-    return statusMap[status] || status;
-  };
-
-  const { colors } = useTheme();
+  // Aperçu de l'activité (basé sur les propositions affichées)
+  const pendingCount = proposals.filter((p) => p.status === 'pending').length;
 
   // Ne jamais afficher le loader si on a déjà des données (évite le flash lors de la navigation)
   if (loading && proposals.length === 0) {
@@ -126,26 +121,29 @@ export default function ProposalsScreen() {
           </View>
         )}
 
-        <View style={[styles.filterTabs, { borderBottomColor: colors.border }]}>
-        {['all', 'sent', 'received'].map((filterType) => (
-          <TouchableOpacity
-            key={filterType}
-            style={[styles.filterTab, filter === filterType && { borderBottomColor: colors.primary }]}
-            onPress={() => setFilter(filterType as any)}
-          >
-            <Text style={[styles.filterTabText, { color: filter === filterType ? colors.primary : colors.textSecondary }]}>
-              {filterType === 'all' ? 'Toutes' : filterType === 'sent' ? 'Envoyées' : 'Reçues'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <View style={styles.filterChips}>
+        {(['all', 'sent', 'received'] as const).map((filterType) => {
+          const active = filter === filterType;
+          return (
+            <TouchableOpacity
+              key={filterType}
+              style={[
+                styles.filterChip,
+                { backgroundColor: active ? colors.primary : colors.surfaceContainer, borderRadius: radius.pill },
+              ]}
+              onPress={() => setFilter(filterType)}
+            >
+              <Text style={[styles.filterChipText, { color: active ? colors.onPrimary : colors.textSecondary }]}>
+                {filterType === 'all' ? 'Toutes' : filterType === 'sent' ? 'Envoyées' : 'Reçues'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: 16 } // Espace après les filtres
-        ]}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -155,6 +153,40 @@ export default function ProposalsScreen() {
           />
         }
       >
+        {/* Hero : aperçu de l'activité */}
+        <LinearGradient
+          colors={[colors.primary, colors.primaryBright]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.hero, { borderRadius: radius.xl }, shadows.card, { shadowColor: colors.primary }]}
+        >
+          <Text style={styles.heroTitle}>Bonjour, {user?.display_name} 👋</Text>
+          <Text style={styles.heroSubtitle}>Aperçu de l'activité de vos propositions.</Text>
+          <View style={styles.heroStats}>
+            <View style={styles.heroStatBox}>
+              <Text style={styles.heroStatLabel}>ACTIVES</Text>
+              <Text style={styles.heroStatValue}>{proposals.length}</Text>
+            </View>
+            <View style={styles.heroStatBox}>
+              <Text style={styles.heroStatLabel}>EN ATTENTE</Text>
+              <Text style={styles.heroStatValue}>{pendingCount}</Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* Bandeau profil vérifié */}
+        {user?.is_verified && (
+          <View style={[styles.verifiedBanner, { backgroundColor: colors.secondary, borderRadius: radius.lg }]}>
+            <View style={styles.verifiedIcon}>
+              <ShieldCheck size={22} color={colors.onSecondary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.verifiedTitle, { color: colors.onSecondary }]}>Profil vérifié</Text>
+              <Text style={[styles.verifiedSubtitle, { color: colors.onSecondary }]}>Certifié auprès de la communauté.</Text>
+            </View>
+          </View>
+        )}
+
         {proposals.length === 0 ? (
           <View style={styles.emptyContainer}>
             <MessageCircle size={48} color={colors.textTertiary} />
@@ -169,7 +201,7 @@ export default function ProposalsScreen() {
               return (
                 <TouchableOpacity
                   key={proposal.id}
-                  style={[styles.proposalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  style={[styles.proposalCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, shadows.card]}
                   onPress={() => router.push({
                     pathname: '/proposal/[id]',
                     params: { id: proposal.id }
@@ -177,9 +209,17 @@ export default function ProposalsScreen() {
                 >
                   <View style={styles.proposalHeader}>
                     <View style={styles.statusRow}>
-                      {getStatusIcon(proposal.status)}
-                      <Text style={[styles.statusText, { color: colors.text }]}>{getStatusText(proposal.status)}</Text>
-                      <Text style={[styles.proposalType, { color: colors.textSecondary }]}>· {isSent ? 'Envoyée' : 'Reçue'}</Text>
+                      {(() => {
+                        const chip = getStatusChip(proposal.status);
+                        return (
+                          <View style={[styles.statusChip, { backgroundColor: chip.bg }]}>
+                            <Text style={[styles.statusChipText, { color: chip.fg }]}>{chip.label}</Text>
+                          </View>
+                        );
+                      })()}
+                      <Text style={[styles.proposalType, { color: colors.textTertiary }]}>{isSent ? 'ENVOYÉE' : 'REÇUE'}</Text>
+                      <View style={{ flex: 1 }} />
+                      <ChevronRight size={20} color={colors.textTertiary} />
                     </View>
                     <Text style={[styles.proposalTitle, { color: colors.text }]} numberOfLines={1}>
                       {proposal.listing?.title}
@@ -248,21 +288,88 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  filterTabs: {
+  filterChips: {
     flexDirection: 'row',
+    gap: 9,
     paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
+    paddingBottom: 14,
   },
-  filterTab: {
+  filterChip: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingVertical: 9,
   },
-  filterTabText: {
-    fontSize: 14,
-    fontWeight: '600',
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  hero: {
+    padding: 20,
+    marginBottom: 14,
+  },
+  heroTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#FFF',
+    marginBottom: 2,
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 16,
+  },
+  heroStats: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  heroStatBox: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 14,
+    padding: 13,
+  },
+  heroStatLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  heroStatValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#FFF',
+  },
+  verifiedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 15,
+    marginBottom: 20,
+  },
+  verifiedIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verifiedTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+  },
+  verifiedSubtitle: {
+    fontSize: 12,
+    opacity: 0.8,
+  },
+  statusChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusChipText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   contentWrapper: {
     flex: 1,
@@ -338,7 +445,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#D8463E',
     borderWidth: 2,
     borderColor: '#FFF',
   },
@@ -346,7 +453,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#2B86CC',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
-import { BottomNav } from '@/components/BottomNav';
 import { ArrowLeft, Clock, Package, Truck, CheckCircle, AlertCircle, FileText, Star } from 'lucide-react-native';
 
 type ExchangeDetail = any;
@@ -277,7 +276,6 @@ export default function ExchangeDetailScreen() {
         <View style={styles.centerContainer}>
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Échange introuvable</Text>
         </View>
-        <BottomNav />
       </SafeAreaView>
     );
   }
@@ -527,7 +525,6 @@ export default function ExchangeDetailScreen() {
         </View>
       </ScrollView>
 
-      <BottomNav />
     </SafeAreaView>
   );
 }
@@ -594,7 +591,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    color: '#64748B',
+    color: '#3C4856',
   },
   timeline: {
     marginTop: 12,

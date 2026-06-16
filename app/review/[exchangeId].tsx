@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
-import { BottomNav } from '@/components/BottomNav';
 import { ArrowLeft, Star, CheckCircle } from 'lucide-react-native';
 
 const REVIEW_TAGS = [
@@ -166,7 +165,6 @@ export default function ReviewScreen() {
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-        <BottomNav />
       </SafeAreaView>
     );
   }
@@ -181,7 +179,6 @@ export default function ReviewScreen() {
             Votre retour a été publié avec succès et aide la communauté BonTroc.
           </Text>
         </View>
-        <BottomNav />
       </SafeAreaView>
     );
   }
@@ -221,8 +218,8 @@ export default function ReviewScreen() {
                 >
                   <Star
                     size={40}
-                    color={star <= rating ? '#F59E0B' : colors.border}
-                    fill={star <= rating ? '#F59E0B' : 'transparent'}
+                    color={star <= rating ? '#F8C61E' : colors.border}
+                    fill={star <= rating ? '#F8C61E' : 'transparent'}
                   />
                 </TouchableOpacity>
               ))}
@@ -312,7 +309,6 @@ export default function ReviewScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-      <BottomNav />
     </SafeAreaView>
   );
 }
