@@ -218,8 +218,8 @@ export default function ReviewScreen() {
                 >
                   <Star
                     size={40}
-                    color={star <= rating ? '#F8C61E' : colors.border}
-                    fill={star <= rating ? '#F8C61E' : 'transparent'}
+                    color={star <= rating ? colors.secondary : colors.border}
+                    fill={star <= rating ? colors.secondary : 'transparent'}
                   />
                 </TouchableOpacity>
               ))}
@@ -360,8 +360,10 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
     marginBottom: 12,
   },
   stars: {

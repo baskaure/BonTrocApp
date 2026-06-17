@@ -10,6 +10,10 @@ type FormInputProps<T extends FieldValues> = {
   error?: FieldError;
   inputProps?: TextInputProps;
   containerStyle?: object;
+  /** Icône optionnelle à gauche du champ (ex. <Mail />). Rétro-compatible : sans icône, rendu inchangé. */
+  leftIcon?: React.ReactNode;
+  /** Élément optionnel à droite du champ (ex. bouton œil). Nécessite leftIcon pour le conteneur en ligne. */
+  rightIcon?: React.ReactNode;
 };
 
 export function FormInput<T extends FieldValues>({
@@ -19,9 +23,12 @@ export function FormInput<T extends FieldValues>({
   error,
   inputProps = {},
   containerStyle,
+  leftIcon,
+  rightIcon,
 }: FormInputProps<T>) {
   const { colors } = useTheme();
   const { style: inputStyle, ...restInputProps } = inputProps;
+  const borderColor = error ? colors.error : colors.border;
 
   return (
     <View style={[styles.container, containerStyle]}>
@@ -31,24 +38,39 @@ export function FormInput<T extends FieldValues>({
       <Controller
         control={control}
         name={name}
-        render={({ field: { onChange, onBlur, value } }) => (
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.surface,
-                borderColor: error ? colors.error : colors.border,
-                color: colors.text,
-              },
-              inputStyle,
-            ]}
-            value={value}
-            onChangeText={onChange}
-            onBlur={onBlur}
-            placeholderTextColor={colors.textTertiary}
-            {...restInputProps}
-          />
-        )}
+        render={({ field: { onChange, onBlur, value } }) =>
+          leftIcon || rightIcon ? (
+            <View style={[styles.inputRow, { backgroundColor: colors.surface, borderColor }]}>
+              {leftIcon}
+              <TextInput
+                style={[styles.inputRowField, { color: colors.text }, inputStyle]}
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                placeholderTextColor={colors.textTertiary}
+                {...restInputProps}
+              />
+              {rightIcon}
+            </View>
+          ) : (
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor,
+                  color: colors.text,
+                },
+                inputStyle,
+              ]}
+              value={value}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              placeholderTextColor={colors.textTertiary}
+              {...restInputProps}
+            />
+          )
+        }
       />
       {error && (
         <Text style={[styles.errorText, { color: colors.error }]}>{error.message}</Text>
@@ -73,6 +95,19 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     padding: 14,
     fontSize: 16,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 13,
+    paddingHorizontal: 14,
+  },
+  inputRowField: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 14,
   },
   errorText: {
     fontSize: 12,

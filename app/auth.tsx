@@ -11,6 +11,7 @@ import { useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormInput } from '@/components/ui/FormInput';
+import { Mail, Lock } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
 const authSchema = z.object({
@@ -401,38 +402,13 @@ export default function AuthScreen() {
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={[styles.title, { color: colors.text }]}>
-          {mode === 'login' ? 'Connexion' : 'Créer un compte'}
+          {mode === 'login' ? 'Bon retour 👋' : 'Créer un compte'}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Accédez à BonTroc pour publier vos annonces et gérer vos échanges.
+          {mode === 'login'
+            ? 'Connectez-vous pour reprendre vos échanges.'
+            : 'Rejoignez le réseau BonTroc pour publier vos annonces et gérer vos échanges.'}
         </Text>
-
-        <TouchableOpacity
-          style={[
-            styles.googleButton,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-            googleLoading && { opacity: 0.7 }
-          ]}
-          onPress={handleGoogleSignIn}
-          disabled={googleLoading}
-        >
-          {googleLoading ? (
-            <ActivityIndicator color="#3C4856" />
-          ) : (
-            <>
-              <GoogleIcon />
-              <Text style={[styles.googleButtonText, { color: colors.text }]}>
-                Continuer avec Google
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.divider}>
-          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-          <Text style={[styles.dividerText, { color: colors.textSecondary }]}>ou</Text>
-          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-        </View>
 
         {mode === 'register' && (
           <>
@@ -465,8 +441,9 @@ export default function AuthScreen() {
         <FormInput
           control={control}
           name="email"
-          label="Email"
+          label="Adresse e-mail"
           error={errors.email}
+          leftIcon={<Mail size={19} color={colors.textTertiary} />}
           inputProps={{
             placeholder: 'votre@email.com',
             keyboardType: 'email-address',
@@ -481,6 +458,7 @@ export default function AuthScreen() {
           name="password"
           label="Mot de passe"
           error={errors.password}
+          leftIcon={<Lock size={19} color={colors.textTertiary} />}
           inputProps={{
             placeholder: '••••••••',
             secureTextEntry: true,
@@ -511,6 +489,33 @@ export default function AuthScreen() {
             <Text style={styles.submitButtonText}>
               {mode === 'login' ? 'Se connecter' : "S'inscrire"}
             </Text>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.divider}>
+          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+          <Text style={[styles.dividerText, { color: colors.textSecondary }]}>ou</Text>
+          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.googleButton,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+            googleLoading && { opacity: 0.7 }
+          ]}
+          onPress={handleGoogleSignIn}
+          disabled={googleLoading}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color={colors.textSecondary} />
+          ) : (
+            <>
+              <GoogleIcon />
+              <Text style={[styles.googleButtonText, { color: colors.text }]}>
+                Continuer avec Google
+              </Text>
+            </>
           )}
         </TouchableOpacity>
 

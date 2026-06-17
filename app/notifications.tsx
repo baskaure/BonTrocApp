@@ -216,7 +216,7 @@ export default function NotificationsScreen() {
               ]}
               onPress={() => handleNotificationPress(notification)}
             >
-              <View style={styles.notificationIcon}>
+              <View style={[styles.notificationIcon, { backgroundColor: colors.primaryLight }]}>
                 <Text style={styles.notificationIconText}>
                   {getNotificationIcon(notification.type)}
                 </Text>
@@ -307,7 +307,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
-    backgroundColor: 'rgba(25, 173, 250, 0.1)',
   },
   notificationIconText: {
     fontSize: 24,

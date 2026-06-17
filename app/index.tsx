@@ -165,11 +165,12 @@ export default function HomeScreen() {
         ) : (
           <View style={styles.listingsGrid}>
             {listings.map((listing) => (
-              <ListingCard
-                key={listing.id}
-                listing={listing}
-                onPress={() => router.push(`/listing/${listing.id}`)}
-              />
+              <View key={listing.id} style={styles.listingCardWrapper}>
+                <ListingCard
+                  listing={listing}
+                  onPress={() => router.push(`/listing/${listing.id}`)}
+                />
+              </View>
             ))}
           </View>
         )}
@@ -258,7 +259,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   listingsGrid: {
-    flexDirection: 'column',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -6,
     paddingBottom: 16,
+  },
+  listingCardWrapper: {
+    width: '50%',
+    paddingHorizontal: 6,
+    paddingVertical: 6,
   },
 });

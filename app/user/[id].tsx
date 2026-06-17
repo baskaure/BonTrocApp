@@ -7,6 +7,7 @@ import { Listing, Review } from '@/lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser, useReviews } from '@/lib/store/hooks';
 import { supabase } from '@/lib/supabase';
+import { ListingCard } from '@/components/ListingCard';
 import { PublicProfileHeader } from '@/components/PublicProfileHeader';
 import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
@@ -53,8 +54,8 @@ export default function PublicProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#2B86CC" />
+      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -90,24 +91,12 @@ export default function PublicProfileScreen() {
                 </Text>
                 <View style={styles.listingsGrid}>
                   {listings.map((listing) => (
-                    <TouchableOpacity
-                      key={listing.id}
-                      style={[styles.listingCard, { backgroundColor: colors.background }]}
-                      onPress={() => router.push(`/listing/${listing.id}`)}
-                    >
-                      {listing.media && listing.media[0] ? (
-                        <Image source={{ uri: listing.media[0].url }} style={styles.listingImage} />
-                      ) : (
-                        <View style={[styles.listingImagePlaceholder, { backgroundColor: colors.primary }]}>
-                          <Text style={styles.listingImageText}>
-                            {listing.type === 'service' ? 'Service' : 'Produit'}
-                          </Text>
-                        </View>
-                      )}
-                      <Text style={[styles.listingTitle, { color: colors.text }]} numberOfLines={2}>
-                        {listing.title}
-                      </Text>
-                    </TouchableOpacity>
+                    <View key={listing.id} style={styles.listingCardWrapper}>
+                      <ListingCard
+                        listing={listing}
+                        onPress={() => router.push(`/listing/${listing.id}`)}
+                      />
+                    </View>
                   ))}
                 </View>
               </View>
@@ -358,7 +347,12 @@ const styles = StyleSheet.create({
   listingsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    marginHorizontal: -6,
+  },
+  listingCardWrapper: {
+    width: '50%',
+    paddingHorizontal: 6,
+    paddingVertical: 6,
   },
   listingCard: {
     width: '48%',
