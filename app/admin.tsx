@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
-import { useTheme } from '@/lib/theme';
+import { useTheme, Theme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
-import { Shield, Users, Flag, AlertTriangle, Loader2, Trash2, CheckCircle, XCircle, Eye, BarChart3, Download, Gavel } from 'lucide-react-native';
+import { Shield, Users, Flag, AlertTriangle, Loader2, Trash2, CheckCircle, XCircle, Eye, BarChart3, Download, Gavel, ArrowLeft } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Tab = 'reports' | 'users' | 'verification' | 'banned-words' | 'disputes' | 'stats';
@@ -26,7 +26,9 @@ type Report = {
 export default function AdminScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const { colors } = useTheme();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = makeStyles(theme);
   const [tab, setTab] = useState<Tab>('reports');
   const [loading, setLoading] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
@@ -224,9 +226,12 @@ export default function AdminScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
+          <ArrowLeft size={24} color={colors.text} />
+        </TouchableOpacity>
         <View style={styles.headerTitle}>
           <Shield size={24} color={colors.primary} />
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={[styles.title, { color: colors.text }]}>Administration</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Modération et gestion BonTroc</Text>
           </View>
@@ -270,7 +275,7 @@ export default function AdminScreen() {
 
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#2B86CC" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
@@ -314,14 +319,14 @@ export default function AdminScreen() {
                           style={styles.reportActionButton}
                           onPress={() => handleReportStatus(report.id, 'resolved')}
                         >
-                          <CheckCircle size={16} color="#1B9A5F" />
+                          <CheckCircle size={16} color={colors.success} />
                           <Text style={styles.reportActionText}>Résolu</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.reportActionButton}
                           onPress={() => handleReportStatus(report.id, 'dismissed')}
                         >
-                          <XCircle size={16} color="#3C4856" />
+                          <XCircle size={16} color={colors.textSecondary} />
                           <Text style={styles.reportActionText}>Rejeter</Text>
                         </TouchableOpacity>
                       </View>
@@ -359,13 +364,13 @@ export default function AdminScreen() {
                         style={styles.verificationApproveButton}
                         onPress={() => handleVerification(req.id, 'verified')}
                       >
-                        <CheckCircle size={20} color="#1B9A5F" />
+                        <CheckCircle size={20} color={colors.success} />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.verificationRejectButton}
                         onPress={() => handleVerification(req.id, 'rejected')}
                       >
-                        <XCircle size={20} color="#D8463E" />
+                        <XCircle size={20} color={colors.error} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -378,12 +383,12 @@ export default function AdminScreen() {
             <View style={styles.tabContent}>
               <View style={styles.searchContainer}>
                 <TextInput
-                  style={styles.searchInput}
+                  style={[styles.searchInput, { color: colors.text }]}
                   placeholder="Rechercher un utilisateur..."
                   value={userSearch}
                   onChangeText={setUserSearch}
                   onSubmitEditing={loadUsers}
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textTertiary}
                 />
                 <TouchableOpacity style={styles.searchButton} onPress={loadUsers}>
                   <Text style={styles.searchButtonText}>Rechercher</Text>
@@ -392,7 +397,7 @@ export default function AdminScreen() {
               {users.map((u) => (
                 <View key={u.id} style={styles.userCard}>
                   <View style={styles.userInfo}>
-                    {u.is_verified && <CheckCircle size={16} color="#2B86CC" />}
+                    {u.is_verified && <CheckCircle size={16} color={colors.primary} />}
                     <Text style={styles.userName}>{u.display_name}</Text>
                     <Text style={styles.userUsername}>@{u.username}</Text>
                   </View>
@@ -431,11 +436,11 @@ export default function AdminScreen() {
             <View style={styles.tabContent}>
               <View style={styles.addWordContainer}>
                 <TextInput
-                  style={styles.addWordInput}
+                  style={[styles.addWordInput, { color: colors.text }]}
                   placeholder="Nouveau mot..."
                   value={newWord}
                   onChangeText={setNewWord}
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textTertiary}
                 />
                 <View style={styles.severityButtons}>
                   {['warning', 'block'].map((sev) => (
@@ -486,7 +491,7 @@ export default function AdminScreen() {
                     onPress={() => removeBannedWord(w.id)}
                     disabled={bannedWordsLoading}
                   >
-                    <Trash2 size={16} color="#D8463E" />
+                    <Trash2 size={16} color={colors.error} />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -593,10 +598,13 @@ export default function AdminScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: Theme) {
+  const c = theme.colors;
+  const { soft } = theme.shadows;
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.background,
   },
   centerContainer: {
     flex: 1,
@@ -605,22 +613,29 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   header: {
-    padding: 16,
-    paddingTop: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  backButton: {
+    padding: 4,
   },
   headerTitle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   title: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#13202E',
+    color: c.text,
   },
   subtitle: {
     fontSize: 12,
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   tabsScroll: {
     maxHeight: 60,
@@ -635,19 +650,19 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
-    backgroundColor: '#FFF',
+    borderColor: c.border,
+    backgroundColor: c.surface,
   },
   tabActive: {
-    backgroundColor: '#2B86CC',
-    borderColor: '#2B86CC',
+    backgroundColor: c.primary,
+    borderColor: c.primary,
   },
   tabText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   tabTextActive: {
     color: '#FFF',
@@ -657,23 +672,24 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 16,
+    paddingBottom: 32,
   },
   tabContent: {
     gap: 12,
   },
   emptyText: {
     fontSize: 16,
-    color: '#3C4856',
+    color: c.textSecondary,
     textAlign: 'center',
     paddingVertical: 48,
   },
   reportCard: {
-    backgroundColor: '#FFF',
+    ...soft,
+    backgroundColor: c.surface,
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
+    borderColor: c.border,
   },
   reportHeader: {
     flexDirection: 'row',
@@ -685,36 +701,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
-    backgroundColor: '#FCF1CC',
+    backgroundColor: c.secondaryLight,
   },
   reportBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#BC840F',
+    color: c.warning,
   },
   reportTypeBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: '#E4F0F9',
+    backgroundColor: c.primaryLight,
   },
   reportTypeText: {
     fontSize: 11,
-    color: '#2B86CC',
+    color: c.primary,
   },
   reportReason: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#13202E',
+    color: c.text,
     marginBottom: 8,
   },
   reportDetails: {
     fontSize: 14,
-    color: '#3C4856',
+    color: c.textSecondary,
     marginBottom: 12,
   },
   reportListing: {
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.surfaceContainer,
     padding: 12,
     borderRadius: 12,
     marginBottom: 12,
@@ -722,16 +738,16 @@ const styles = StyleSheet.create({
   reportListingTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#13202E',
+    color: c.text,
     marginBottom: 4,
   },
   reportListingStatus: {
     fontSize: 12,
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   reportMeta: {
     fontSize: 12,
-    color: '#7B8896',
+    color: c.textTertiary,
     marginBottom: 12,
   },
   reportActions: {
@@ -747,20 +763,21 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
-    backgroundColor: '#FFF',
+    borderColor: c.border,
+    backgroundColor: c.surface,
   },
   reportActionText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   verificationCard: {
-    backgroundColor: '#FFF',
+    ...soft,
+    backgroundColor: c.surface,
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
+    borderColor: c.border,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -780,7 +797,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#2B86CC',
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -795,12 +812,12 @@ const styles = StyleSheet.create({
   verificationName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#13202E',
+    color: c.text,
     marginBottom: 4,
   },
   verificationEmail: {
     fontSize: 13,
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   verificationActions: {
     flexDirection: 'row',
@@ -810,7 +827,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#DCF2E5',
+    backgroundColor: c.successLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -818,7 +835,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#FBE7E5',
+    backgroundColor: c.errorLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -829,17 +846,18 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
+    borderColor: c.border,
     borderRadius: 20,
     padding: 12,
     fontSize: 15,
+    color: c.text,
   },
   searchButton: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#2B86CC',
+    backgroundColor: c.primary,
     borderRadius: 20,
   },
   searchButtonText: {
@@ -848,11 +866,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   userCard: {
-    backgroundColor: '#FFF',
+    ...soft,
+    backgroundColor: c.surface,
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
+    borderColor: c.border,
     marginBottom: 12,
   },
   userInfo: {
@@ -864,11 +883,11 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#13202E',
+    color: c.text,
   },
   userUsername: {
     fontSize: 14,
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   userRoleContainer: {
     flexDirection: 'row',
@@ -877,7 +896,7 @@ const styles = StyleSheet.create({
   },
   userRoleLabel: {
     fontSize: 14,
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   userRoleButtons: {
     flexDirection: 'row',
@@ -888,12 +907,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
-    backgroundColor: '#FFF',
+    borderColor: c.border,
+    backgroundColor: c.surface,
   },
   userRoleButtonActive: {
-    backgroundColor: '#2B86CC',
-    borderColor: '#2B86CC',
+    backgroundColor: c.primary,
+    borderColor: c.primary,
   },
   userRoleButtonDisabled: {
     opacity: 0.5,
@@ -901,7 +920,7 @@ const styles = StyleSheet.create({
   userRoleButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   userRoleButtonTextActive: {
     color: '#FFF',
@@ -914,12 +933,13 @@ const styles = StyleSheet.create({
   },
   addWordInput: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
+    borderColor: c.border,
     borderRadius: 20,
     padding: 12,
     fontSize: 15,
+    color: c.text,
   },
   severityButtons: {
     flexDirection: 'row',
@@ -930,17 +950,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
-    backgroundColor: '#FFF',
+    borderColor: c.border,
+    backgroundColor: c.surface,
   },
   severityButtonActive: {
-    backgroundColor: '#2B86CC',
-    borderColor: '#2B86CC',
+    backgroundColor: c.primary,
+    borderColor: c.primary,
   },
   severityButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   severityButtonTextActive: {
     color: '#FFF',
@@ -948,7 +968,7 @@ const styles = StyleSheet.create({
   addWordButton: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#2B86CC',
+    backgroundColor: c.primary,
     borderRadius: 20,
   },
   addWordButtonText: {
@@ -957,14 +977,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bannedWordCard: {
+    ...soft,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFF',
+    backgroundColor: c.surface,
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
+    borderColor: c.border,
     marginBottom: 12,
   },
   bannedWordInfo: {
@@ -976,31 +997,32 @@ const styles = StyleSheet.create({
   bannedWordText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#13202E',
+    color: c.text,
   },
   bannedWordSeverity: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: '#FCF1CC',
+    backgroundColor: c.secondaryLight,
   },
   bannedWordSeverityBlock: {
-    backgroundColor: '#FBE7E5',
+    backgroundColor: c.errorLight,
   },
   bannedWordSeverityText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#BC840F',
+    color: c.warning,
   },
   removeWordButton: {
     padding: 8,
   },
   disputeCard: {
-    backgroundColor: '#FFF',
+    ...soft,
+    backgroundColor: c.surface,
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
+    borderColor: c.border,
     marginBottom: 12,
   },
   disputeHeader: {
@@ -1013,32 +1035,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
-    backgroundColor: '#FBE7E5',
+    backgroundColor: c.errorLight,
   },
   disputeStatusBadgeResolved: {
-    backgroundColor: '#DCF2E5',
+    backgroundColor: c.successLight,
   },
   disputeStatusBadgeOpen: {
-    backgroundColor: '#FBE7E5',
+    backgroundColor: c.errorLight,
   },
   disputeStatusText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#D8463E',
+    color: c.error,
   },
   disputeDate: {
     fontSize: 12,
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   disputeReason: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#13202E',
+    color: c.text,
     marginBottom: 8,
   },
   disputeOpenedBy: {
     fontSize: 13,
-    color: '#3C4856',
+    color: c.textSecondary,
     marginBottom: 12,
   },
   disputeActions: {
@@ -1050,24 +1072,24 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
-    backgroundColor: '#FFF',
+    borderColor: c.border,
+    backgroundColor: c.surface,
     alignItems: 'center',
   },
   disputeResolveButton: {
-    backgroundColor: '#DCF2E5',
-    borderColor: '#1B9A5F',
+    backgroundColor: c.successLight,
+    borderColor: c.success,
   },
   disputeResolveText: {
-    color: '#1B9A5F',
+    color: c.success,
   },
   disputeDismissButton: {
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.surfaceContainer,
   },
   disputeActionText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -1075,38 +1097,40 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   statCard: {
+    ...soft,
     width: '48%',
-    backgroundColor: '#FFF',
+    backgroundColor: c.surface,
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
+    borderColor: c.border,
     alignItems: 'center',
   },
   statValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#2B86CC',
+    color: c.primary,
     marginBottom: 8,
   },
   statValueSuccess: {
-    color: '#1B9A5F',
+    color: c.success,
   },
   statLabel: {
     fontSize: 13,
-    color: '#3C4856',
+    color: c.textSecondary,
   },
   accessDeniedTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#13202E',
+    color: c.text,
     marginTop: 16,
     marginBottom: 8,
   },
   accessDeniedText: {
     fontSize: 14,
-    color: '#3C4856',
+    color: c.textSecondary,
     textAlign: 'center',
   },
-});
+  });
+}
 

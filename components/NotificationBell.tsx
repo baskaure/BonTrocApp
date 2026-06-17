@@ -55,7 +55,8 @@ export function NotificationBell({ onPress }: NotificationBellProps) {
 
   return (
     <TouchableOpacity
-      style={[styles.bellContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      style={styles.bellContainer}
+      hitSlop={8}
       onPress={() => {
         if (onPress) {
           onPress();
@@ -66,7 +67,7 @@ export function NotificationBell({ onPress }: NotificationBellProps) {
     >
       <Bell size={24} color={colors.textSecondary} />
       {unreadCount > 0 && (
-        <View style={[styles.badge, { backgroundColor: colors.primary, borderColor: colors.surface }]}>
+        <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.background }]}>
           <Text style={styles.badgeText}>
             {unreadCount > 99 ? '99+' : unreadCount}
           </Text>
@@ -79,7 +80,7 @@ export function NotificationBell({ onPress }: NotificationBellProps) {
 const styles = StyleSheet.create({
   bellContainer: {
     position: 'relative',
-    padding: 8,
+    padding: 4,
   },
   badge: {
     position: 'absolute',

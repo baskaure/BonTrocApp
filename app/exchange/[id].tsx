@@ -19,7 +19,7 @@ const steps = [
 export default function ExchangeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, shadows } = useTheme();
   const { user } = useAuth();
 
   const [exchange, setExchange] = useState<ExchangeDetail | null>(null);
@@ -311,13 +311,13 @@ export default function ExchangeDetailScreen() {
           </View>
         ) : null}
 
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.soft]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Échange avec</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{otherParty?.display_name || 'Utilisateur'}</Text>
         </View>
 
         {/* Timeline */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.soft]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Statut</Text>
           <View style={styles.timeline}>
             {steps.map((step, index) => {
@@ -365,7 +365,7 @@ export default function ExchangeDetailScreen() {
 
         {/* Due date */}
         {exchange.due_date && (
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.soft]}>
             <View style={[styles.dueDateBox, { backgroundColor: colors.primaryLight }]}>
               <Clock size={20} color={colors.primary} />
               <View>
@@ -384,7 +384,7 @@ export default function ExchangeDetailScreen() {
         )}
 
         {/* Actions */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.soft]}>
           {exchange.status === 'not_started' && !contractIsActive && (
             <View
               style={[
@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 32,
     gap: 12,
   },
   card: {

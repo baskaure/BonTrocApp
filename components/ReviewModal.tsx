@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { X, Star, CheckCircle } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme, Theme } from '@/lib/theme';
 import { FormInput } from './ui/FormInput';
 import { reviewSchema, ReviewFormData } from '@/lib/validations/review';
 
@@ -28,6 +29,9 @@ type ReviewModalProps = {
 
 export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewModalProps) {
   const { user } = useAuth();
+  const theme = useTheme();
+  const { colors } = theme;
+  const styles = makeStyles(theme);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -116,7 +120,7 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
       >
         <View style={styles.overlay}>
           <View style={styles.successModal}>
-            <CheckCircle size={64} color="#1B9A5F" />
+            <CheckCircle size={64} color={colors.success} />
             <Text style={styles.successTitle}>Merci pour votre avis !</Text>
             <Text style={styles.successText}>
               Votre retour a été publié avec succès et aide la communauté BonTroc.
@@ -139,7 +143,7 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
           <View style={styles.header}>
             <Text style={styles.title}>Laisser un avis</Text>
             <TouchableOpacity onPress={onClose}>
-              <X size={24} color="#3C4856" />
+              <X size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -159,8 +163,8 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
                   >
                     <Star
                       size={40}
-                      color={star <= rating ? '#F8C61E' : '#CBD5E1'}
-                      fill={star <= rating ? '#F8C61E' : 'transparent'}
+                      color={star <= rating ? colors.secondary : colors.border}
+                      fill={star <= rating ? colors.secondary : 'transparent'}
                     />
                   </TouchableOpacity>
                 ))}
@@ -246,14 +250,17 @@ export function ReviewModal({ exchange, visible, onClose, onSuccess }: ReviewMod
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: Theme) {
+  const c = theme.colors;
+  const { card } = theme.shadows;
+  return StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: c.overlay,
     justifyContent: 'flex-end',
   },
   modal: {
-    backgroundColor: '#FFF',
+    backgroundColor: c.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '90%',
@@ -264,24 +271,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E7EDF3',
+    borderBottomColor: c.border,
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#13202E',
+    color: c.text,
   },
   scrollView: {
     padding: 20,
   },
   description: {
     fontSize: 15,
-    color: '#3C4856',
+    color: c.textSecondary,
     marginBottom: 24,
   },
   bold: {
     fontWeight: '600',
-    color: '#13202E',
+    color: c.text,
   },
   ratingSection: {
     marginBottom: 24,
@@ -291,7 +298,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
-    color: '#3C4856',
+    color: c.textSecondary,
     marginBottom: 12,
   },
   stars: {
@@ -305,7 +312,7 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#13202E',
+    color: c.text,
     marginLeft: 12,
   },
   tagsSection: {
@@ -321,16 +328,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
-    backgroundColor: '#EEF2F6',
+    borderColor: c.border,
+    backgroundColor: c.surfaceContainer,
   },
   tagSelected: {
-    backgroundColor: '#2B86CC',
-    borderColor: '#2B86CC',
+    backgroundColor: c.primary,
+    borderColor: c.primary,
   },
   tagText: {
     fontSize: 13,
-    color: '#3C4856',
+    color: c.textSecondary,
     fontWeight: '600',
   },
   tagTextSelected: {
@@ -340,29 +347,29 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   textArea: {
-    backgroundColor: '#EEF2F6',
+    backgroundColor: c.surfaceContainer,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
+    borderColor: c.border,
     borderRadius: 12,
     padding: 12,
     fontSize: 15,
     minHeight: 100,
     textAlignVertical: 'top',
     marginBottom: 8,
-    color: '#13202E',
+    color: c.text,
   },
   hint: {
     fontSize: 12,
-    color: '#7B8896',
+    color: c.textTertiary,
   },
   errorBox: {
-    backgroundColor: '#FBE7E5',
+    backgroundColor: c.errorLight,
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   errorText: {
-    color: '#D8463E',
+    color: c.error,
     fontSize: 14,
   },
   footer: {
@@ -370,24 +377,24 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: '#E7EDF3',
+    borderTopColor: c.border,
   },
   cancelButton: {
     flex: 1,
     padding: 16,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E7EDF3',
+    borderColor: c.border,
     alignItems: 'center',
   },
   cancelButtonText: {
-    color: '#3C4856',
+    color: c.textSecondary,
     fontSize: 16,
     fontWeight: '600',
   },
   submitButton: {
     flex: 1,
-    backgroundColor: '#2B86CC',
+    backgroundColor: c.primary,
     padding: 16,
     borderRadius: 20,
     alignItems: 'center',
@@ -401,7 +408,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   successModal: {
-    backgroundColor: '#FFF',
+    ...card,
+    backgroundColor: c.surface,
     borderRadius: 24,
     padding: 32,
     alignItems: 'center',
@@ -410,14 +418,15 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#13202E',
+    color: c.text,
     marginTop: 16,
     marginBottom: 8,
   },
   successText: {
     fontSize: 14,
-    color: '#3C4856',
+    color: c.textSecondary,
     textAlign: 'center',
   },
-});
+  });
+}
 

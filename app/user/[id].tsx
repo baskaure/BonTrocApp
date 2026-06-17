@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100, // Espace pour la bottom bar fixe
+    paddingBottom: 32,
   },
   profileCard: {
     borderRadius: 24,

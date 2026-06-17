@@ -402,7 +402,7 @@ export default function AuthScreen() {
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={[styles.title, { color: colors.text }]}>
-          {mode === 'login' ? 'Bon retour 👋' : 'Créer un compte'}
+          {mode === 'login' ? 'Bon retour' : 'Créer un compte'}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           {mode === 'login'

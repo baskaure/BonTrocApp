@@ -109,7 +109,7 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
       transparent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
         <View style={[styles.modal, { backgroundColor: colors.surface }]}>
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <View style={styles.headerTitle}>

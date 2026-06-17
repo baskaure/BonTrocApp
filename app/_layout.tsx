@@ -82,31 +82,35 @@ function RootLayoutNav() {
   return (
     <>
       <AppHeader />
-      <Stack 
-        screenOptions={{ 
-          headerShown: false, 
-          animation: 'none', // Navigation instantanée sans animation
-        }} 
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          // Écrans poussés (détail) : glissement + retour par balayage latéral
+          animation: 'slide_from_right',
+          gestureEnabled: true,
+        }}
         initialRouteName="(splash)"
       >
-        <Stack.Screen name="(splash)" options={{ headerShown: false, animation: 'none' }} />
-        <Stack.Screen name="landing" options={{ animation: 'none' }} />
-        <Stack.Screen name="index" options={{ animation: 'none' }} />
-        <Stack.Screen name="auth" options={{ animation: 'none' }} />
-        <Stack.Screen name="auth/callback" options={{ animation: 'none' }} />
-        <Stack.Screen name="proposals" options={{ animation: 'none' }} />
-        <Stack.Screen name="proposal/[id]" options={{ animation: 'none' }} />
-        <Stack.Screen name="listing/[id]" options={{ animation: 'none' }} />
-        <Stack.Screen name="listing/create" options={{ animation: 'none' }} />
-        <Stack.Screen name="profile" options={{ animation: 'none' }} />
-        <Stack.Screen name="settings" options={{ animation: 'none' }} />
-        <Stack.Screen name="exchanges" options={{ animation: 'none' }} />
-        <Stack.Screen name="exchange/[id]" options={{ animation: 'none' }} />
-        <Stack.Screen name="contract/[id]" options={{ animation: 'none' }} />
-        <Stack.Screen name="admin" options={{ animation: 'none' }} />
-        <Stack.Screen name="user/[id]" options={{ animation: 'none' }} />
-        <Stack.Screen name="reviews/[userId]" options={{ animation: 'none' }} />
-        <Stack.Screen name="review/[exchangeId]" options={{ animation: 'none' }} />
+        {/* Onglets & flux d'authentification : navigation instantanée, pas de geste retour */}
+        <Stack.Screen name="(splash)" options={{ headerShown: false, animation: 'none', gestureEnabled: false }} />
+        <Stack.Screen name="landing" options={{ animation: 'none', gestureEnabled: false }} />
+        <Stack.Screen name="index" options={{ animation: 'none', gestureEnabled: false }} />
+        <Stack.Screen name="auth" options={{ animation: 'none', gestureEnabled: false }} />
+        <Stack.Screen name="auth/callback" options={{ animation: 'none', gestureEnabled: false }} />
+        <Stack.Screen name="proposals" options={{ animation: 'none', gestureEnabled: false }} />
+        <Stack.Screen name="profile" options={{ animation: 'none', gestureEnabled: false }} />
+        <Stack.Screen name="exchanges" options={{ animation: 'none', gestureEnabled: false }} />
+        {/* Écrans de détail : héritent du glissement + geste retour */}
+        <Stack.Screen name="proposal/[id]" />
+        <Stack.Screen name="listing/[id]" />
+        <Stack.Screen name="listing/create" />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="exchange/[id]" />
+        <Stack.Screen name="contract/[id]" />
+        <Stack.Screen name="admin" />
+        <Stack.Screen name="user/[id]" />
+        <Stack.Screen name="reviews/[userId]" />
+        <Stack.Screen name="review/[exchangeId]" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <BottomNavWrapper />

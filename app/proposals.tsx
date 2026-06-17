@@ -161,7 +161,7 @@ export default function ProposalsScreen() {
           end={{ x: 1, y: 1 }}
           style={[styles.hero, { borderRadius: radius.xl }, shadows.card, { shadowColor: colors.primary }]}
         >
-          <Text style={styles.heroTitle}>Bonjour, {user?.display_name || 'à vous'} 👋</Text>
+          <Text style={styles.heroTitle}>Bonjour, {user?.display_name || 'à vous'}</Text>
           <Text style={styles.heroSubtitle}>Aperçu de l'activité de vos propositions.</Text>
           <View style={styles.heroStats}>
             <View style={styles.heroStatBox}>

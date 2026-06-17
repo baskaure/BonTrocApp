@@ -16,7 +16,7 @@ export default function ProposalDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, radius, shadows } = useTheme();
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -290,17 +290,17 @@ export default function ProposalDetailScreen() {
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View>
               {/* Carte de proposition améliorée */}
-              <View style={[styles.proposalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.proposalCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, shadows.card]}>
                 {/* Informations utilisateur */}
                 <View style={styles.userSection}>
                   <View style={styles.userInfo}>
                     {otherUser?.avatar_url ? (
                       <Image
                         source={{ uri: otherUser.avatar_url }}
-                        style={styles.avatar}
+                        style={[styles.avatar, { borderColor: colors.surface }]}
                       />
                     ) : (
-                      <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
+                      <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary, borderColor: colors.surface }]}>
                         <Text style={styles.avatarText}>
                           {otherUser?.display_name?.[0]?.toUpperCase() || '?'}
                         </Text>
@@ -361,7 +361,7 @@ export default function ProposalDetailScreen() {
                     )}
                     <View style={styles.actionButtons}>
                       <TouchableOpacity
-                        style={[styles.actionButton, styles.acceptButton, { backgroundColor: colors.success }]}
+                        style={[styles.actionButton, { backgroundColor: colors.success }]}
                         onPress={handleAccept}
                         disabled={actionLoading}
                       >
@@ -375,7 +375,7 @@ export default function ProposalDetailScreen() {
                         )}
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.actionButton, styles.counterButton, { backgroundColor: colors.warning }]}
+                        style={[styles.actionButton, { backgroundColor: colors.warning }]}
                         onPress={() => setShowCounterForm(true)}
                         disabled={actionLoading}
                       >
@@ -383,7 +383,7 @@ export default function ProposalDetailScreen() {
                         <Text style={styles.actionButtonText}>Contre-proposer</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.actionButton, styles.refuseButton, { backgroundColor: colors.error }]}
+                        style={[styles.actionButton, { backgroundColor: colors.error }]}
                         onPress={handleRefuse}
                         disabled={actionLoading}
                       >
@@ -464,7 +464,7 @@ export default function ProposalDetailScreen() {
               </View>
 
               {/* Section Discussion */}
-              <View style={[styles.chatSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.chatSection, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, shadows.card]}>
                 <View style={[styles.chatHeader, { borderBottomColor: colors.border }]}>
                   <MessageCircle size={20} color={colors.primary} />
                   <Text style={[styles.chatHeaderText, { color: colors.text }]}>Discussion</Text>
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 32,
   },
   proposalCard: {
     borderRadius: 16,
@@ -642,15 +642,6 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 15,
     fontWeight: '600',
-  },
-  acceptButton: {
-    backgroundColor: '#1B9A5F',
-  },
-  counterButton: {
-    backgroundColor: '#F8C61E',
-  },
-  refuseButton: {
-    backgroundColor: '#D8463E',
   },
   counterForm: {
     padding: 16,

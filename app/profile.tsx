@@ -212,7 +212,7 @@ export default function ProfileScreen() {
     }
   };
 
-  const { colors } = useTheme();
+  const { colors, shadows } = useTheme();
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -244,7 +244,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.card]}>
           <View style={styles.bannerContainer}>
             {formValues.banner_url ? (
               <Image 
@@ -256,7 +256,7 @@ export default function ProfileScreen() {
                 }}
               />
             ) : (
-              <View style={styles.bannerPlaceholder} />
+              <View style={[styles.bannerPlaceholder, { backgroundColor: colors.primary }]} />
             )}
             {isEditing && (
               <TouchableOpacity
@@ -289,7 +289,7 @@ export default function ProfileScreen() {
                   }}
                 />
               ) : (
-                <View style={[styles.avatarPlaceholder, { borderColor: colors.surface }]}>
+                <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary, borderColor: colors.surface }]}>
                   <Text style={styles.avatarText}>
                     {formValues.display_name[0]?.toUpperCase() || 'U'}
                   </Text>
@@ -555,7 +555,7 @@ export default function ProfileScreen() {
                     </View>
                   </View>
                 ) : (
-                  <View style={[styles.verificationPrompt, { backgroundColor: colors.background }]}>
+                  <View style={[styles.verificationPrompt, { backgroundColor: colors.surfaceContainer }]}>
                     <Text style={[styles.verificationPromptText, { color: colors.text }]}>
                       Faites vérifier votre profil pour gagner la confiance des autres membres.
                     </Text>
@@ -574,11 +574,11 @@ export default function ProfileScreen() {
 
               <View style={[styles.statsSection, { borderTopColor: colors.border }]}>
                 <View style={styles.statsCards}>
-                  <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View style={[styles.statCard, { backgroundColor: colors.surfaceContainer, borderColor: colors.border }]}>
                     <Text style={[styles.statCardValue, { color: colors.primary }]}>{listingsCount}</Text>
                     <Text style={[styles.statCardLabel, { color: colors.textTertiary }]}>ANNONCES</Text>
                   </View>
-                  <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View style={[styles.statCard, { backgroundColor: colors.surfaceContainer, borderColor: colors.border }]}>
                     <Text style={[styles.statCardValue, { color: colors.primary }]}>{reviews.length}</Text>
                     <Text style={[styles.statCardLabel, { color: colors.textTertiary }]}>AVIS</Text>
                   </View>
@@ -617,7 +617,7 @@ export default function ProfileScreen() {
                 ) : (
                   <View style={styles.reviewsList}>
                     {reviews.slice(0, 2).map((review) => (
-                      <View key={review.id} style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      <View key={review.id} style={[styles.reviewCard, { backgroundColor: colors.surfaceContainer, borderColor: colors.border }]}>
                         <View style={styles.reviewHeader}>
                           {review.reviewer?.avatar_url ? (
                             <Image
@@ -625,7 +625,7 @@ export default function ProfileScreen() {
                               style={styles.reviewerAvatar}
                             />
                           ) : (
-                            <View style={styles.reviewerAvatarPlaceholder}>
+                            <View style={[styles.reviewerAvatarPlaceholder, { backgroundColor: colors.primary }]}>
                               <Text style={styles.reviewerAvatarText}>
                                 {review.reviewer?.display_name?.[0]?.toUpperCase() || '?'}
                               </Text>

@@ -34,7 +34,10 @@ export const BottomNav = React.memo(() => {
     router.replace(path);
   }, [pathname, router]);
 
-  if (!user) return null;
+  // La barre d'onglets ne s'affiche que sur les écrans de premier niveau.
+  // Les écrans de détail (poussés avec bouton retour) sont en plein écran.
+  const TAB_ROUTES = ['/', '/proposals', '/exchanges', '/profile'];
+  if (!user || !TAB_ROUTES.includes(pathname)) return null;
 
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safeArea, { backgroundColor: colors.surface }]} pointerEvents="box-none">

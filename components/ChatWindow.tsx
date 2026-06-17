@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Keyboard } from 'react-native';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Send } from 'lucide-react-native';
@@ -257,11 +257,7 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[styles.container, { borderTopColor: colors.border }]}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-    >
+    <View style={[styles.container, { borderTopColor: colors.border }]}>
       <ScrollView
         ref={scrollViewRef}
         style={styles.messagesContainer}
@@ -358,7 +354,7 @@ export function ChatWindow({ proposalId, onUserClick }: ChatWindowProps) {
           )}
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

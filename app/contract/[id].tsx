@@ -14,7 +14,7 @@ export default function ContractScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const { colors } = useTheme();
+  const { colors, shadows } = useTheme();
   const [contract, setContract] = useState<Contract & {
     proposal?: {
       from_user_id: string;
@@ -274,7 +274,7 @@ export default function ContractScreen() {
           {hasUserAccepted && hasOtherAccepted && (
             <View style={[styles.successBox, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
               <Text style={[styles.successText, { color: colors.success }]}>
-                ✓ Contrat entièrement signé électroniquement sur BonTroc et désormais actif.
+                Contrat entièrement signé électroniquement sur BonTroc et désormais actif.
               </Text>
             </View>
           )}
@@ -286,7 +286,7 @@ export default function ContractScreen() {
             <Text style={[styles.contractTitle, { color: colors.text }]}>Contenu du contrat</Text>
           </View>
 
-          <View style={[styles.contractContent, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.contractContent, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.soft]}>
             <WebView
               source={{ html: contract.html_content }}
               style={styles.webview}
@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 32,
   },
   errorBox: {
     marginBottom: 20,

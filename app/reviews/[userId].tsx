@@ -15,7 +15,7 @@ type ReviewWithReviewer = Review & {
 export default function ReviewsScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, shadows } = useTheme();
   const [reviews, setReviews] = useState<ReviewWithReviewer[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,7 +117,7 @@ export default function ReviewsScreen() {
           }
         >
           {/* Résumé des avis */}
-          <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.card]}>
             <View style={styles.summaryRow}>
               <View style={styles.summaryRating}>
                 <Text style={[styles.summaryRatingValue, { color: colors.text }]}>
@@ -150,7 +150,7 @@ export default function ReviewsScreen() {
             {reviews.map((review) => (
               <View
                 key={review.id}
-                style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.soft]}
               >
                 <View style={styles.reviewHeader}>
                   {review.reviewer?.avatar_url ? (
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 32,
   },
   summaryCard: {
     padding: 16,

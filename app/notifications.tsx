@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Bell } from 'lucide-react-native';
+import { ArrowLeft, Bell, Mail, CheckCircle, MessageCircle, Package, Star } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { supabase, Notification } from '@/lib/supabase';
@@ -120,17 +120,17 @@ export default function NotificationsScreen() {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'proposal_received':
-        return '📨';
+        return Mail;
       case 'proposal_accepted':
-        return '✅';
+        return CheckCircle;
       case 'message_received':
-        return '💬';
+        return MessageCircle;
       case 'exchange_update':
-        return '📦';
+        return Package;
       case 'review_received':
-        return '⭐';
+        return Star;
       default:
-        return '🔔';
+        return Bell;
     }
   };
 
@@ -216,11 +216,14 @@ export default function NotificationsScreen() {
               ]}
               onPress={() => handleNotificationPress(notification)}
             >
-              <View style={[styles.notificationIcon, { backgroundColor: colors.primaryLight }]}>
-                <Text style={styles.notificationIconText}>
-                  {getNotificationIcon(notification.type)}
-                </Text>
-              </View>
+              {(() => {
+                const Icon = getNotificationIcon(notification.type);
+                return (
+                  <View style={[styles.notificationIcon, { backgroundColor: colors.primaryLight }]}>
+                    <Icon size={22} color={colors.primary} />
+                  </View>
+                );
+              })()}
               <View style={styles.notificationContent}>
                 <View style={styles.notificationHeader}>
                   <Text style={[styles.notificationTitle, { color: colors.text }]}>
@@ -293,7 +296,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 32,
   },
   notificationItem: {
     flexDirection: 'row',

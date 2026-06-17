@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
-import { Lock, Bell, Shield, AlertTriangle } from 'lucide-react-native';
+import { Lock, Bell, Shield, AlertTriangle, ArrowLeft } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SettingsScreen() {
@@ -124,6 +124,9 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
+          <ArrowLeft size={24} color={colors.text} />
+        </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Paramètres</Text>
       </View>
 
@@ -336,11 +339,17 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   header: {
-    padding: 16,
-    paddingTop: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  backButton: {
+    padding: 4,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
   },
   scrollView: {
@@ -348,7 +357,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 16,
+    paddingBottom: 32,
   },
   errorBox: {
     padding: 12,
