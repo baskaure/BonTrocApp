@@ -197,7 +197,7 @@ export default function CreateListingScreen() {
               ))}
               {images.length < 5 && (
                 <TouchableOpacity
-                  style={[styles.addImageButton, { backgroundColor: colors.background, borderColor: colors.border }]}
+                  style={[styles.addImageButton, { backgroundColor: colors.surfaceContainer, borderColor: colors.border }]}
                   onPress={pickImage}
                   disabled={uploading}
                 >
@@ -227,7 +227,7 @@ export default function CreateListingScreen() {
                   key={type}
                   style={[
                     styles.radioButton,
-                    { borderColor: colors.border },
+                    { borderColor: colors.border, backgroundColor: colors.surface },
                     formValues.type === type && { borderColor: colors.primary, backgroundColor: colors.primaryLight },
                   ]}
                   onPress={() => setValue('type', type)}

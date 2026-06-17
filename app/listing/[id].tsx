@@ -17,7 +17,7 @@ import { X } from 'lucide-react-native';
 export default function ListingDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { colors } = useTheme();
+  const { colors, radius, shadows } = useTheme();
   const { user } = useAuth();
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
@@ -348,7 +348,7 @@ export default function ListingDetailScreen() {
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {imageUrl && (
-            <Image source={{ uri: imageUrl }} style={styles.image} />
+            <Image source={{ uri: imageUrl }} style={[styles.image, { borderRadius: radius.xl }]} />
           )}
 
           {editMode && isOwnListing && (
@@ -384,7 +384,7 @@ export default function ListingDetailScreen() {
           )}
 
           <TouchableOpacity
-            style={styles.userSection}
+            style={[styles.userSection, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, shadows.soft]}
             onPress={() => listing.user?.id && router.push(`/user/${listing.user.id}`)}
             disabled={!listing.user?.id}
           >
@@ -434,7 +434,7 @@ export default function ListingDetailScreen() {
                 {listing.type === 'service' ? 'Service' : 'Produit'}
               </Text>
             </View>
-            <View style={[styles.badge, { backgroundColor: colors.background }]}>
+            <View style={[styles.badge, { backgroundColor: colors.surfaceContainer }]}>
               <Text style={[styles.badgeText, { color: colors.textSecondary }]}>
                 {listing.mode === 'remote' ? 'Distance' : listing.mode === 'on_site' ? 'Présentiel' : 'Les deux'}
               </Text>
@@ -509,7 +509,7 @@ export default function ListingDetailScreen() {
               )}
 
               {!isOwnListing && user && showProposalForm && (
-                <View style={[styles.proposalForm, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <View style={[styles.proposalForm, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, shadows.soft]}>
                   <Text style={[styles.proposalFormTitle, { color: colors.text }]}>Votre proposition</Text>
                   <FormInput
                     control={proposalForm.control}
@@ -571,7 +571,7 @@ export default function ListingDetailScreen() {
               )}
 
               {!user && (
-                <View style={[styles.authPrompt, { backgroundColor: colors.background }]}>
+                <View style={[styles.authPrompt, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.lg }, shadows.soft]}>
                   <Text style={[styles.authPromptText, { color: colors.text }]}>
                     Connectez-vous pour proposer un échange
                   </Text>
@@ -862,6 +862,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    padding: 14,
+    borderWidth: 1,
     marginBottom: 16,
   },
   avatar: {
@@ -925,9 +927,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   badge: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 999,
   },
   badgeText: {
     fontSize: 12,
@@ -938,8 +940,8 @@ const styles = StyleSheet.create({
   },
   offerBox: {
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
+    borderRadius: 16,
+    borderWidth: 1,
   },
   offerHeader: {
     flexDirection: 'row',
@@ -958,8 +960,8 @@ const styles = StyleSheet.create({
   },
   seekBox: {
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
+    borderRadius: 16,
+    borderWidth: 1,
   },
   seekHeader: {
     flexDirection: 'row',

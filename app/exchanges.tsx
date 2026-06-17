@@ -82,7 +82,7 @@ export default function ExchangesScreen() {
     setTimeout(() => setRefreshing(false), 500);
   };
 
-  const { colors } = useTheme();
+  const { colors, radius, shadows } = useTheme();
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -156,8 +156,8 @@ export default function ExchangesScreen() {
             key={status}
             style={[
               styles.filterButton,
-              { backgroundColor: colors.surfaceContainer, borderColor: 'transparent' },
-              filterStatus === status && { backgroundColor: colors.primary, borderColor: colors.primary },
+              { backgroundColor: colors.surfaceContainer, borderRadius: radius.pill },
+              filterStatus === status && { backgroundColor: colors.primary },
             ]}
             onPress={() => setFilterStatus(status)}
           >
@@ -217,7 +217,7 @@ export default function ExchangesScreen() {
             return (
               <TouchableOpacity
                 key={exchange.id}
-                style={[styles.exchangeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                style={[styles.exchangeCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, shadows.card]}
                 onPress={() =>
                   router.push({
                     pathname: '/exchange/[id]',
@@ -310,13 +310,11 @@ const styles = StyleSheet.create({
   },
   filterButton: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
+    paddingVertical: 9,
   },
   filterButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
   },
   scrollView: {
     flex: 1,

@@ -111,6 +111,8 @@ export default function SettingsScreen() {
     }
   };
 
+  const { colors, radius, shadows } = useTheme();
+
   if (!user) {
     return (
       <View style={styles.centerContainer}>
@@ -118,8 +120,6 @@ export default function SettingsScreen() {
       </View>
     );
   }
-
-  const { colors } = useTheme();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -129,18 +129,18 @@ export default function SettingsScreen() {
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {error && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
+          <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
+            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
           </View>
         )}
 
         {success && (
-          <View style={styles.successBox}>
-            <Text style={styles.successText}>{success}</Text>
+          <View style={[styles.successBox, { backgroundColor: colors.successLight }]}>
+            <Text style={[styles.successText, { color: colors.success }]}>{success}</Text>
           </View>
         )}
 
-        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.card]}>
           <View style={styles.sectionHeader}>
             <Lock size={15} color={colors.primary} />
             <Text style={[styles.sectionTitle, { color: colors.primary }]}>SÉCURITÉ DU COMPTE</Text>
@@ -183,13 +183,13 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.card]}>
           <View style={styles.sectionHeader}>
             <Bell size={15} color={colors.primary} />
             <Text style={[styles.sectionTitle, { color: colors.primary }]}>NOTIFICATIONS</Text>
           </View>
 
-          <View style={styles.notificationItem}>
+          <View style={[styles.notificationItem, { borderBottomColor: colors.border }]}>
             <View style={styles.notificationInfo}>
               <Text style={[styles.notificationTitle, { color: colors.text }]}>Nouvelles propositions</Text>
               <Text style={[styles.notificationDescription, { color: colors.textSecondary }]}>
@@ -199,11 +199,11 @@ export default function SettingsScreen() {
             <Switch
               value={notificationSettings.emailNewProposal}
               onValueChange={() => handleNotificationToggle('emailNewProposal')}
-              trackColor={{ false: '#CBD5E1', true: '#2B86CC' }}
+              trackColor={{ false: colors.border, true: colors.primary }}
             />
           </View>
 
-          <View style={styles.notificationItem}>
+          <View style={[styles.notificationItem, { borderBottomColor: colors.border }]}>
             <View style={styles.notificationInfo}>
               <Text style={[styles.notificationTitle, { color: colors.text }]}>Propositions acceptées</Text>
               <Text style={[styles.notificationDescription, { color: colors.textSecondary }]}>
@@ -213,11 +213,11 @@ export default function SettingsScreen() {
             <Switch
               value={notificationSettings.emailAcceptedProposal}
               onValueChange={() => handleNotificationToggle('emailAcceptedProposal')}
-              trackColor={{ false: '#CBD5E1', true: '#2B86CC' }}
+              trackColor={{ false: colors.border, true: colors.primary }}
             />
           </View>
 
-          <View style={styles.notificationItem}>
+          <View style={[styles.notificationItem, { borderBottomColor: colors.border }]}>
             <View style={styles.notificationInfo}>
               <Text style={[styles.notificationTitle, { color: colors.text }]}>Nouveaux messages</Text>
               <Text style={[styles.notificationDescription, { color: colors.textSecondary }]}>
@@ -227,11 +227,11 @@ export default function SettingsScreen() {
             <Switch
               value={notificationSettings.emailNewMessage}
               onValueChange={() => handleNotificationToggle('emailNewMessage')}
-              trackColor={{ false: '#CBD5E1', true: '#2B86CC' }}
+              trackColor={{ false: colors.border, true: colors.primary }}
             />
           </View>
 
-          <View style={styles.notificationItem}>
+          <View style={[styles.notificationItem, { borderBottomColor: colors.border }]}>
             <View style={styles.notificationInfo}>
               <Text style={[styles.notificationTitle, { color: colors.text }]}>Résumé hebdomadaire</Text>
               <Text style={[styles.notificationDescription, { color: colors.textSecondary }]}>
@@ -241,12 +241,12 @@ export default function SettingsScreen() {
             <Switch
               value={notificationSettings.emailWeeklyDigest}
               onValueChange={() => handleNotificationToggle('emailWeeklyDigest')}
-              trackColor={{ false: '#CBD5E1', true: '#2B86CC' }}
+              trackColor={{ false: colors.border, true: colors.primary }}
             />
           </View>
         </View>
 
-        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.card]}>
           <View style={styles.sectionHeader}>
             <Shield size={15} color={colors.primary} />
             <Text style={[styles.sectionTitle, { color: colors.primary }]}>CONFIDENTIALITÉ</Text>
@@ -424,8 +424,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E7EDF3',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   notificationInfo: {
     flex: 1,
