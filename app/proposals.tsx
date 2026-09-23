@@ -1,14 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
-import { Proposal } from '@/lib/supabase';
+import { ProposalStatus } from '@/lib/supabase';
 import { MessageCircle, ChevronRight, ShieldCheck } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProposals } from '@/lib/store/hooks';
-import { supabase } from '@/lib/supabase';
+import { useActivityStore } from '@/lib/activity';
 import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
 export default function ProposalsScreen() {
@@ -16,74 +16,35 @@ export default function ProposalsScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<'all' | 'sent' | 'received'>('all');
   const [refreshing, setRefreshing] = useState(false);
-  const [proposalsWithUnreadMessages, setProposalsWithUnreadMessages] = useState<Set<string>>(new Set());
 
   // Utiliser le store pour charger les propositions
-  const { proposals, loading, error, refresh } = useProposals(user?.id || null, filter, { autoLoad: !!user });
-  
+  const { proposals, loading, error, refresh, reload } = useProposals(user?.id || null, filter, { autoLoad: !!user });
+
+  // Messages non lus par conversation (calculés depuis chat_messages, voir lib/activity.ts)
+  const unreadByProposal = useActivityStore((s) => s.unreadByProposal);
+  const refreshActivity = useActivityStore((s) => s.refresh);
+
   // Récupérer la hauteur dynamique du header (hauteur totale avec safe area)
   const { pageHeaderTotalHeight } = useHeaderHeightStore();
 
-  useEffect(() => {
-    if (user) {
-      loadUnreadMessages();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (user) {
-      loadUnreadMessages();
-    }
-  }, [proposals]);
-
-  async function loadUnreadMessages() {
-    if (!user) return;
-
-    try {
-      // Récupérer les notifications de type message_received non lues
-      const { data: notifications, error } = await supabase
-        .from('notifications')
-        .select('related_id')
-        .eq('user_id', user.id)
-        .eq('type', 'message_received')
-        .is('read_at', null);
-
-      if (error) {
-        // Si la table n'existe pas, on ignore silencieusement
-        if (error.code === 'PGRST205') {
-          console.warn('Table notifications does not exist. Please run the SQL script to create it.');
-          setProposalsWithUnreadMessages(new Set());
-        } else {
-          console.error('Error loading unread messages:', error);
-        }
-        return;
-      }
-
-      if (notifications) {
-        // Extraire les IDs des propositions qui ont des messages non lus
-        const proposalIds = new Set(
-          notifications
-            .map(n => n.related_id)
-            .filter(id => id !== null) as string[]
-        );
-        setProposalsWithUnreadMessages(proposalIds);
-      }
-    } catch (error) {
-      console.error('Error loading unread messages:', error);
-      setProposalsWithUnreadMessages(new Set());
-    }
-  }
+  // Au retour sur l'onglet, on relit le cache (invalidé après chaque action sur une proposition).
+  useFocusEffect(
+    useCallback(() => {
+      if (user) void reload();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, filter]),
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);
     refresh();
-    loadUnreadMessages();
+    if (user) void refreshActivity(user.id);
     setTimeout(() => setRefreshing(false), 500);
   };
 
   const { colors, radius, shadows } = useTheme();
 
-  const getStatusChip = (status: string): { bg: string; fg: string; label: string } => {
+  const getStatusChip = (status: ProposalStatus): { bg: string; fg: string; label: string } => {
     switch (status) {
       case 'accepted':
         return { bg: colors.primaryLight, fg: colors.primary, label: 'ACCEPTÉE' };
@@ -162,7 +123,7 @@ export default function ProposalsScreen() {
           style={[styles.hero, { borderRadius: radius.xl }, shadows.card, { shadowColor: colors.primary }]}
         >
           <Text style={styles.heroTitle}>Bonjour, {user?.display_name || 'à vous'}</Text>
-          <Text style={styles.heroSubtitle}>Aperçu de l'activité de vos propositions.</Text>
+          <Text style={styles.heroSubtitle}>Aperçu de l’activité de vos propositions.</Text>
           <View style={styles.heroStats}>
             <View style={styles.heroStatBox}>
               <Text style={styles.heroStatLabel}>ACTIVES</Text>
@@ -241,7 +202,7 @@ export default function ProposalsScreen() {
                           </Text>
                         </View>
                       )}
-                      {proposalsWithUnreadMessages.has(proposal.id) && (
+                      {(unreadByProposal[proposal.id] ?? 0) > 0 && (
                         <View style={styles.unreadMessageBadge} />
                       )}
                     </View>
@@ -254,10 +215,10 @@ export default function ProposalsScreen() {
                   </View>
 
                   <Text style={[styles.proposalMessage, { color: colors.textSecondary }]} numberOfLines={2}>
-                    {proposal.message}
+                    {proposal.offer_payload?.description || proposal.message}
                   </Text>
 
-                  {proposal.status === 'pending' && (
+                  {(proposal.status === 'pending' || proposal.status === 'countered') && (
                     <TouchableOpacity
                       style={[styles.discussButton, { backgroundColor: colors.primary }]}
                       onPress={() => router.push({

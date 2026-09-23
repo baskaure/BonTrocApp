@@ -120,6 +120,42 @@ export default function HomeScreen() {
               </View>
             </View>
 
+            {categories.length > 0 && (
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Catégorie</Text>
+                <View style={styles.filterButtons}>
+                  <TouchableOpacity
+                    onPress={() => setFilterCategory(null)}
+                    style={[
+                      styles.filterButton,
+                      { backgroundColor: colors.surface, borderColor: colors.border },
+                      !filterCategory && { backgroundColor: colors.primary, borderColor: colors.primary },
+                    ]}
+                  >
+                    <Text style={[styles.filterButtonText, { color: colors.textSecondary }, !filterCategory && styles.filterButtonTextActive]}>Toutes</Text>
+                  </TouchableOpacity>
+                  {categories.map((category) => {
+                    const active = filterCategory === category.id;
+                    return (
+                      <TouchableOpacity
+                        key={category.id}
+                        onPress={() => setFilterCategory(active ? null : category.id)}
+                        style={[
+                          styles.filterButton,
+                          { backgroundColor: colors.surface, borderColor: colors.border },
+                          active && { backgroundColor: colors.primary, borderColor: colors.primary },
+                        ]}
+                      >
+                        <Text style={[styles.filterButtonText, { color: colors.textSecondary }, active && styles.filterButtonTextActive]}>
+                          {category.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
             <View style={styles.filterSection}>
               <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Mode</Text>
               <View style={styles.filterButtons}>

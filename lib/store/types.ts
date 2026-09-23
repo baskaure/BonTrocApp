@@ -1,5 +1,3 @@
-import { Listing, Category, User, Proposal, Exchange, Review, Notification } from '@/lib/supabase';
-
 // Types pour le cache avec timestamps
 export interface CachedData<T> {
   data: T;
@@ -11,6 +9,7 @@ export interface CachedData<T> {
 export interface ListingFilters {
   type?: 'all' | 'service' | 'product';
   mode?: 'all' | 'remote' | 'on_site' | 'both';
+  /** id de catégorie (table `categories`), ou null pour toutes */
   category?: string | null;
   searchQuery?: string;
 }
@@ -26,5 +25,4 @@ export const CACHE_DURATIONS = {
   proposals: 1 * 60 * 1000, // 1 minute
   exchanges: 1 * 60 * 1000, // 1 minute
   reviews: 5 * 60 * 1000, // 5 minutes
-  notifications: 30 * 1000, // 30 secondes
 } as const;

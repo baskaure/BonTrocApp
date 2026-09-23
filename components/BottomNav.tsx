@@ -5,14 +5,14 @@ import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { Compass, FileText, ArrowLeftRight, Plus } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNotificationBadges } from '@/hooks/useNotificationBadges';
+import { useActivityBadges } from '@/hooks/useActivity';
 
 export const BottomNav = React.memo(() => {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
   const { colors, radius, shadows } = useTheme();
-  const badges = useNotificationBadges();
+  const badges = useActivityBadges();
 
   const isActive = useCallback((path: string) => {
     if (path === '/' && pathname === '/') return true;
@@ -127,6 +127,8 @@ export const BottomNav = React.memo(() => {
     </SafeAreaView>
   );
 });
+
+BottomNav.displayName = 'BottomNav';
 
 const styles = StyleSheet.create({
   safeArea: {

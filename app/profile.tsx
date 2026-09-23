@@ -4,11 +4,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
-import { supabase, Review } from '@/lib/supabase';
+import { supabase, errorMessage } from '@/lib/supabase';
+import { pickImages, uploadImage, uploadVerificationDocument, removeStorageObject } from '@/lib/image';
+import { normalizeUsername } from '@/lib/labels';
 import { Settings, LogOut, Star, Edit2, X, Check, Mail, Phone, MapPin, Calendar, Shield, Camera, ImageUp, Loader2, CheckCircle, Clock, XCircle } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useReviews } from '@/lib/store/hooks';
 import { FormInput } from '@/components/ui/FormInput';
@@ -17,7 +17,7 @@ import { profileSchema, ProfileFormData } from '@/lib/validations/profile';
 
 
 export default function ProfileScreen() {
-  const { user, signOut, refreshUser } = useAuth();
+  const { user, signOut, updateProfile } = useAuth();
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -25,6 +25,7 @@ export default function ProfileScreen() {
   const [success, setSuccess] = useState('');
   const [listingsCount, setListingsCount] = useState(0);
   const [mediaUploading, setMediaUploading] = useState({ avatar: false, banner: false });
+  const [verificationUploading, setVerificationUploading] = useState(false);
 
   const {
     control,
@@ -52,7 +53,7 @@ export default function ProfileScreen() {
   const formValues = watch();
 
   // Utiliser le store pour charger les reviews
-  const { reviews, loading: reviewsLoading, refresh: refreshReviews } = useReviews(user?.id || null, { autoLoad: !!user });
+  const { reviews, loading: reviewsLoading } = useReviews(user?.id || null, { autoLoad: !!user });
 
   useEffect(() => {
     if (user) {
@@ -92,83 +93,19 @@ export default function ProfileScreen() {
 
   const uploadProfileMedia = async (type: 'avatar' | 'banner') => {
     if (!user) return;
-
-    // Demander la permission d'accès à la bibliothèque de photos
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour accéder aux photos');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      // @ts-ignore - MediaTypeOptions est déprécié mais fonctionne toujours
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: type === 'avatar' ? [1, 1] : [16, 9],
-      quality: 0.9,
-    });
-
-    if (result.canceled) return;
-
-    setMediaUploading((prev) => ({ ...prev, [type]: true }));
     setError('');
 
     try {
-      const file = result.assets[0];
-      
-      // Utiliser .jpg pour éviter les problèmes de transparence
-      const fileName = `${type}/${user.id}-${Date.now()}.jpg`;
-      const mime = file.mimeType || 'image/jpeg';
+      const [asset] = await pickImages({ max: 1, allowsEditing: true, aspect: type === 'avatar' ? [1, 1] : [16, 9] });
+      if (!asset) return;
 
-      // Vérifier la taille du fichier
-      const size = file.fileSize || 0;
-      const maxBytes = 5 * 1024 * 1024; // 5 Mo
-      if (size > maxBytes) {
-        throw new Error('Image trop volumineuse (max 5 Mo).');
-      }
-
-      // Pour React Native, il faut lire le fichier et l'uploader via fetch
-      // Lire le fichier en base64
-      const base64 = await FileSystem.readAsStringAsync(file.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      // Convertir base64 en ArrayBuffer
-      const byteCharacters = atob(base64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-
-      // Upload vers Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('profile-media')
-        .upload(fileName, byteArray, {
-          upsert: true,
-          contentType: mime,
-        });
-
-      if (uploadError) {
-        console.error('Upload error details:', uploadError);
-        throw uploadError;
-      }
-
-      // Obtenir l'URL publique avec un timestamp pour forcer le rechargement
-      const { data: urlData } = supabase.storage.from('profile-media').getPublicUrl(fileName);
-      if (!urlData?.publicUrl) {
-        throw new Error('Impossible de récupérer l\'URL publique de l\'image');
-      }
-      
-      // Ajouter un timestamp pour éviter le cache
-      const imageUrl = `${urlData.publicUrl}?t=${Date.now()}`;
-      
-      console.log('Image uploaded successfully:', imageUrl);
-      
-      setValue(type === 'avatar' ? 'avatar_url' : 'banner_url', imageUrl);
-    } catch (err: any) {
+      setMediaUploading((prev) => ({ ...prev, [type]: true }));
+      // Dossiers `avatars/` et `banners/` (au pluriel) : c'est ce que la policy de stockage autorise.
+      const url = await uploadImage({ bucket: 'profile-media', folder: type === 'avatar' ? 'avatars' : 'banners', userId: user.id, asset });
+      setValue(type === 'avatar' ? 'avatar_url' : 'banner_url', url);
+    } catch (err) {
       console.error('Upload error:', err);
-      setError(err.message || 'Erreur lors du téléversement');
+      setError(errorMessage(err, 'Erreur lors du téléversement'));
     } finally {
       setMediaUploading((prev) => ({ ...prev, [type]: false }));
     }
@@ -182,33 +119,63 @@ export default function ProfileScreen() {
     setSuccess('');
 
     try {
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          display_name: data.display_name,
-          username: data.username,
-          bio: data.bio,
-          phone: data.phone,
-          city: data.city,
-          country: data.country,
-          languages: data.languages,
-          skills: data.skills,
-          search_radius_km: data.search_radius_km,
-          avatar_url: data.avatar_url,
-          banner_url: data.banner_url,
-        })
-        .eq('id', user.id);
+      const previousAvatar = user.avatar_url;
+      const previousBanner = user.banner_url;
 
-      if (updateError) throw updateError;
+      // Le rôle, l'e-mail et la note sont gelés côté serveur : on n'envoie que les champs éditables.
+      await updateProfile({
+        display_name: data.display_name.trim(),
+        username: normalizeUsername(data.username),
+        bio: data.bio?.trim() || null,
+        phone: data.phone?.trim() || null,
+        city: data.city?.trim() || null,
+        country: data.country?.trim() || null,
+        languages: data.languages,
+        skills: data.skills,
+        search_radius_km: data.search_radius_km,
+        avatar_url: data.avatar_url || null,
+        banner_url: data.banner_url || null,
+      });
 
-      await refreshUser();
-      setSuccess('Profil mis à jour avec succès!');
+      // Anciens médias remplacés : on libère le stockage (sans bloquer en cas d'échec).
+      if (previousAvatar && previousAvatar !== data.avatar_url) void removeStorageObject('profile-media', previousAvatar);
+      if (previousBanner && previousBanner !== data.banner_url) void removeStorageObject('profile-media', previousBanner);
+
+      setSuccess('Profil mis à jour !');
       setIsEditing(false);
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la mise à jour');
+    } catch (err) {
+      setError(errorMessage(err, 'Erreur lors de la mise à jour'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** Pièce d'identité : bucket privé, statut `pending` jusqu'à examen par la modération. */
+  const submitVerification = async () => {
+    if (!user) return;
+    setError('');
+    try {
+      const [asset] = await pickImages({ max: 1 });
+      if (!asset) return;
+      setVerificationUploading(true);
+
+      const path = await uploadVerificationDocument(user.id, asset);
+
+      // Ancien document (dossier privé de l'utilisateur) : on l'efface.
+      const previous = user.verification_document_url;
+      if (previous && previous !== path) {
+        const oldPath = previous.startsWith('http') ? decodeURIComponent(previous.split('/verification-documents/')[1] ?? '') : previous;
+        if (oldPath) await supabase.storage.from('verification-documents').remove([oldPath]);
+      }
+
+      // Le trigger n'accepte ce passage en `pending` que depuis `none` ou `rejected`.
+      await updateProfile({ verification_document_url: path, verification_status: 'pending', verification_submitted_at: new Date().toISOString() });
+      Alert.alert('Document envoyé', 'Notre équipe va examiner votre demande de vérification.');
+    } catch (err) {
+      setError(errorMessage(err, 'Erreur lors du téléversement'));
+    } finally {
+      setVerificationUploading(false);
     }
   };
 
@@ -386,7 +353,7 @@ export default function ProfileScreen() {
                   name="username"
                   label="Nom d'utilisateur *"
                   containerStyle={styles.formGroup}
-                  inputProps={{ placeholder: '@username', autoCapitalize: 'none' }}
+                  inputProps={{ placeholder: 'pseudo', autoCapitalize: 'none', autoCorrect: false, maxLength: 30 }}
                 />
               </View>
 
@@ -543,30 +510,33 @@ export default function ProfileScreen() {
                     <Clock size={24} color={colors.warning} />
                     <View>
                       <Text style={[styles.verificationStatusTitle, { color: colors.text }]}>Vérification en cours</Text>
-                      <Text style={[styles.verificationStatusText, { color: colors.textSecondary }]}>Votre document est en cours d'examen</Text>
-                    </View>
-                  </View>
-                ) : user.verification_status === 'rejected' ? (
-                  <View style={[styles.verificationStatus, { backgroundColor: colors.errorLight }]}>
-                    <XCircle size={24} color={colors.error} />
-                    <View>
-                      <Text style={[styles.verificationStatusTitle, { color: colors.text }]}>Vérification refusée</Text>
-                      <Text style={[styles.verificationStatusText, { color: colors.textSecondary }]}>Vous pouvez soumettre un nouveau document</Text>
+                      <Text style={[styles.verificationStatusText, { color: colors.textSecondary }]}>Votre document est en cours d’examen</Text>
                     </View>
                   </View>
                 ) : (
-                  <View style={[styles.verificationPrompt, { backgroundColor: colors.surfaceContainer }]}>
-                    <Text style={[styles.verificationPromptText, { color: colors.text }]}>
-                      Faites vérifier votre profil pour gagner la confiance des autres membres.
-                    </Text>
+                  <View style={[styles.verificationPrompt, { backgroundColor: user.verification_status === 'rejected' ? colors.errorLight : colors.surfaceContainer }]}>
+                    {user.verification_status === 'rejected' ? (
+                      <View style={[styles.verificationStatus, { paddingHorizontal: 0, paddingTop: 0 }]}>
+                        <XCircle size={24} color={colors.error} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.verificationStatusTitle, { color: colors.text }]}>Vérification refusée</Text>
+                          <Text style={[styles.verificationStatusText, { color: colors.textSecondary }]}>
+                            {user.verification_notes ? `Motif : ${user.verification_notes}` : 'Vous pouvez soumettre un nouveau document.'}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={[styles.verificationPromptText, { color: colors.text }]}>
+                        Faites vérifier votre profil pour gagner la confiance des autres membres. Envoyez une photo lisible d’une pièce d’identité : elle n’est visible que par notre équipe.
+                      </Text>
+                    )}
                     <TouchableOpacity
-                      style={[styles.verificationButton, { backgroundColor: colors.primary }]}
-                      onPress={() => {
-                        Alert.alert('Info', 'Fonctionnalité de vérification à venir');
-                      }}
+                      style={[styles.verificationButton, { backgroundColor: colors.primary }, verificationUploading && { opacity: 0.6 }]}
+                      onPress={submitVerification}
+                      disabled={verificationUploading}
                     >
-                      <Shield size={16} color="#FFF" />
-                      <Text style={styles.verificationButtonText}>Envoyer un document</Text>
+                      {verificationUploading ? <ActivityIndicator color="#FFF" size="small" /> : <Shield size={16} color="#FFF" />}
+                      <Text style={styles.verificationButtonText}>{verificationUploading ? 'Envoi…' : 'Envoyer un document'}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -579,14 +549,12 @@ export default function ProfileScreen() {
                     <Text style={[styles.statCardLabel, { color: colors.textTertiary }]}>ANNONCES</Text>
                   </View>
                   <View style={[styles.statCard, { backgroundColor: colors.surfaceContainer, borderColor: colors.border }]}>
-                    <Text style={[styles.statCardValue, { color: colors.primary }]}>{reviews.length}</Text>
+                    <Text style={[styles.statCardValue, { color: colors.primary }]}>{user.rating_count || reviews.length}</Text>
                     <Text style={[styles.statCardLabel, { color: colors.textTertiary }]}>AVIS</Text>
                   </View>
                   <View style={[styles.statCard, styles.statCardAccent, { backgroundColor: colors.secondary }]}>
                     <Text style={[styles.statCardValue, { color: colors.onSecondary }]}>
-                      {reviews.length > 0
-                        ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
-                        : '-'}
+                      {user.rating_count > 0 ? Number(user.rating_avg).toFixed(1) : '-'}
                     </Text>
                     <Text style={[styles.statCardLabel, { color: colors.onSecondary }]}>NOTE</Text>
                   </View>

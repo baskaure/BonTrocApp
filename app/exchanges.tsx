@@ -1,80 +1,50 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
-import { supabase, Exchange } from '@/lib/supabase';
+import { Exchange, ExchangeStatus } from '@/lib/supabase';
+import { EXCHANGE_STATUS_LABEL } from '@/lib/labels';
 import { Package, Clock, CheckCircle, XCircle, AlertCircle, Calendar } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useExchanges } from '@/lib/store/hooks';
 import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
-type ExchangeWithDetails = Exchange & {
-  contract?: {
-    proposal?: {
-      from_user?: { display_name: string; avatar_url?: string };
-      to_user?: { display_name: string; avatar_url?: string };
-      listing?: { title: string };
-    };
-  };
-  dispute?: any;
-};
+type Filter = 'all' | ExchangeStatus;
+
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: 'all', label: 'Tous' },
+  { id: 'not_started', label: 'À démarrer' },
+  { id: 'in_progress', label: 'En cours' },
+  { id: 'delivered', label: 'À confirmer' },
+  { id: 'confirmed', label: 'Terminés' },
+];
 
 export default function ExchangesScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<Filter>('all');
   const [refreshing, setRefreshing] = useState(false);
 
   // Utiliser le store pour charger les échanges
-  const { exchanges: rawExchanges, loading, refresh } = useExchanges(user?.id || null, { autoLoad: !!user });
-  
+  const { exchanges: rawExchanges, loading, refresh, reload } = useExchanges(user?.id || null, { autoLoad: !!user });
+
   // Récupérer la hauteur dynamique du header (hauteur totale avec safe area)
   const { pageHeaderTotalHeight } = useHeaderHeightStore();
 
-  // Convertir en ExchangeWithDetails et filtrer par statut
-  const exchanges = useMemo(() => {
-    const filtered = rawExchanges.filter((ex: any) => {
-      if (filterStatus === 'all') return true;
-      return ex.status === filterStatus;
-    }) as ExchangeWithDetails[];
-    return filtered;
-  }, [rawExchanges, filterStatus]);
+  // Filtrer par statut
+  const exchanges = useMemo(
+    () => rawExchanges.filter((ex) => filterStatus === 'all' || ex.status === filterStatus),
+    [rawExchanges, filterStatus],
+  );
 
-  useEffect(() => {
-    if (user) {
-      // Marquer les notifications d'échanges comme lues
-      markExchangeNotificationsAsRead();
-    }
-  }, [user, exchanges]);
-
-  async function markExchangeNotificationsAsRead() {
-    if (!user) return;
-    
-    try {
-      const { data: updated, error: updateError } = await supabase
-        .from('notifications')
-        .update({ read_at: new Date().toISOString() })
-        .eq('user_id', user.id)
-        .eq('type', 'exchange_update')
-        .is('read_at', null)
-        .select();
-      
-      if (updateError) {
-        // Si la table n'existe pas, on ignore silencieusement
-        if (updateError.code !== 'PGRST205') {
-          console.error('Error marking exchange notifications as read:', updateError);
-        }
-      } else if (updated && updated.length > 0) {
-        console.log(`Marked ${updated.length} exchange notifications as read`);
-      }
-    } catch (err: any) {
-      // Ignorer les erreurs si la table n'existe pas
-      if (err?.code !== 'PGRST205') {
-        console.error('Error in mark exchange notifications as read:', err);
-      }
-    }
-  }
+  // Au retour sur l'onglet, on relit le cache (invalidé après chaque action sur un échange).
+  useFocusEffect(
+    useCallback(() => {
+      if (user) void reload();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id]),
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -101,16 +71,7 @@ export default function ExchangesScreen() {
     }
   };
 
-  const getStatusText = (status: string) => {
-    const texts: Record<string, string> = {
-      not_started: 'Non démarré',
-      in_progress: 'En cours',
-      delivered: 'Livré (en attente)',
-      confirmed: 'Confirmé',
-      cancelled: 'Annulé',
-    };
-    return texts[status] || status;
-  };
+  const getStatusText = (status: string) => EXCHANGE_STATUS_LABEL[status as ExchangeStatus] || status;
 
   const getStatusColor = (status: string) => {
     const map: Record<string, string> = {
@@ -123,14 +84,10 @@ export default function ExchangesScreen() {
     return map[status] || colors.textSecondary;
   };
 
-  const getOtherParty = (exchange: ExchangeWithDetails) => {
+  const getOtherParty = (exchange: Exchange) => {
     const proposal = exchange.contract?.proposal;
     if (!proposal) return null;
-    const fromUserId = (proposal as any).from_user_id;
-    if (fromUserId === user?.id) {
-      return proposal.to_user;
-    }
-    return proposal.from_user;
+    return proposal.from_user_id === user?.id ? proposal.to_user : proposal.from_user;
   };
 
 
@@ -151,7 +108,7 @@ export default function ExchangesScreen() {
           style={styles.filterScroll}
           contentContainerStyle={styles.filterContainer}
         >
-        {['all', 'in_progress', 'delivered', 'confirmed'].map((status) => (
+        {FILTERS.map(({ id: status, label }) => (
           <TouchableOpacity
             key={status}
             style={[
@@ -168,10 +125,7 @@ export default function ExchangesScreen() {
                 filterStatus === status && { color: colors.onPrimary, fontWeight: '700' },
               ]}
             >
-              {status === 'all' ? 'Tous' :
-               status === 'in_progress' ? 'En cours' :
-               status === 'delivered' ? 'À confirmer' :
-               'Terminés'}
+              {label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -258,12 +212,10 @@ export default function ExchangesScreen() {
                   </View>
                 )}
 
-                {exchange.dispute && (
+                {exchange.dispute && (exchange.dispute.status === 'open' || exchange.dispute.status === 'in_review') && (
                   <View style={[styles.disputeBadge, { backgroundColor: colors.errorLight }]}>
                     <AlertCircle size={14} color={colors.error} />
-                    <Text style={[styles.disputeText, { color: colors.error }]}>
-                      Litige {exchange.dispute.status === 'resolved' ? 'résolu' : 'en cours'}
-                    </Text>
+                    <Text style={[styles.disputeText, { color: colors.error }]}>Litige en cours</Text>
                   </View>
                 )}
               </TouchableOpacity>

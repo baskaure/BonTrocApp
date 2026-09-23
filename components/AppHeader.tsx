@@ -88,6 +88,8 @@ export const AppHeader = React.memo(() => {
   );
 });
 
+AppHeader.displayName = 'AppHeader';
+
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',

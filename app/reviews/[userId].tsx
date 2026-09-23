@@ -1,23 +1,18 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
-import { supabase, Review, User } from '@/lib/supabase';
+import { supabase, Review, PublicProfile } from '@/lib/supabase';
+import { REVIEW_SELECT } from '@/lib/queries';
 import { ArrowLeft, Star } from 'lucide-react-native';
-import { TouchableOpacity } from 'react-native';
-import { Image } from 'react-native';
-
-type ReviewWithReviewer = Review & {
-  reviewer?: { display_name: string; avatar_url?: string };
-};
 
 export default function ReviewsScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const router = useRouter();
   const { colors, shadows } = useTheme();
-  const [reviews, setReviews] = useState<ReviewWithReviewer[]>([]);
-  const [user, setUser] = useState<User | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [user, setUser] = useState<Pick<PublicProfile, 'id' | 'display_name' | 'rating_avg' | 'rating_count'> | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -31,11 +26,12 @@ export default function ReviewsScreen() {
   async function loadUser() {
     if (!userId) return;
     try {
+      // Profil d'un autre membre : toujours la vue public_profiles.
       const { data } = await supabase
-        .from('users')
-        .select('*')
+        .from('public_profiles')
+        .select('id, display_name, rating_avg, rating_count')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (data) setUser(data);
     } catch (err) {
@@ -49,14 +45,11 @@ export default function ReviewsScreen() {
     try {
       const { data } = await supabase
         .from('reviews')
-        .select(`
-          *,
-          reviewer:users!reviews_reviewer_id_fkey(display_name, avatar_url)
-        `)
+        .select(REVIEW_SELECT)
         .eq('reviewee_id', userId)
         .order('created_at', { ascending: false });
 
-      if (data) setReviews(data);
+      if (data) setReviews(data as unknown as Review[]);
     } catch (err) {
       console.error('Error loading reviews:', err);
     } finally {
@@ -70,9 +63,12 @@ export default function ReviewsScreen() {
     loadReviews(true);
   };
 
-  const averageRating = reviews.length > 0
-    ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-    : 0;
+  // Note calculée côté serveur (trigger sur reviews) ; repli sur la moyenne locale.
+  const averageRating = user && user.rating_count > 0
+    ? Number(user.rating_avg)
+    : reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : 0;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>

@@ -4,10 +4,13 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { useAuth } from '@/lib/auth-context';
-import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Clock, Package, Truck, CheckCircle, AlertCircle, FileText, Star } from 'lucide-react-native';
-
-type ExchangeDetail = any;
+import { supabase, Exchange, ExchangeStatus, errorMessage } from '@/lib/supabase';
+import { EXCHANGE_SELECT } from '@/lib/queries';
+import { checkContent, blockedMessage } from '@/lib/moderation';
+import { DISPUTE_STATUS_LABEL, formatDateFr } from '@/lib/labels';
+import { useStore } from '@/lib/store';
+import { useActivityStore, exchangeSeenKey } from '@/lib/activity';
+import { ArrowLeft, Clock, Package, Truck, CheckCircle, AlertCircle, FileText, Star, XCircle } from 'lucide-react-native';
 
 const steps = [
   { id: 'not_started', label: 'Non démarré', icon: Clock },
@@ -22,7 +25,7 @@ export default function ExchangeDetailScreen() {
   const { colors, shadows } = useTheme();
   const { user } = useAuth();
 
-  const [exchange, setExchange] = useState<ExchangeDetail | null>(null);
+  const [exchange, setExchange] = useState<Exchange | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showDisputeForm, setShowDisputeForm] = useState(false);
@@ -32,107 +35,90 @@ export default function ExchangeDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(false);
   const hasLoadedRef = useRef(false);
+  const markSeen = useActivityStore((s) => s.markSeen);
 
   const loadExchange = useCallback(async (silent = false) => {
-    // Ne pas afficher le loader si on a déjà des données (évite le flash)
-    if (!silent && !exchange) {
-      setLoading(true);
-    }
+    if (!silent && !exchange) setLoading(true);
     setError('');
     try {
-      const { data, error } = await supabase
-        .from('exchanges')
-        .select(`
-          *,
-          dispute:disputes(*),
-          contract:contracts(
-            *,
-            proposal:proposals(
-              *,
-              from_user:users!proposals_from_user_id_fkey(display_name, avatar_url),
-              to_user:users!proposals_to_user_id_fkey(display_name, avatar_url),
-              listing:listings(title)
-            )
-          )
-        `)
-        .eq('id', id)
-        .single();
-
+      const { data, error } = await supabase.from('exchanges').select(EXCHANGE_SELECT).eq('id', id).maybeSingle();
       if (error) throw error;
 
-      const normalized = data
+      const raw = data as unknown as (Exchange & { dispute?: unknown }) | null;
+      const normalized: Exchange | null = raw
         ? {
-            ...data,
-            dispute: Array.isArray(data.dispute) ? data.dispute[0] : data.dispute,
+            ...raw,
+            dispute: Array.isArray(raw.dispute)
+              ? (raw.dispute.find((d) => d.status === 'open' || d.status === 'in_review') ?? raw.dispute[0] ?? null)
+              : (raw.dispute as Exchange['dispute']) ?? null,
           }
         : null;
 
       setExchange(normalized);
 
-      // marquer notifications comme lues
-      if (user && data) {
-        await supabase
-          .from('notifications')
-          .update({ read_at: new Date().toISOString() })
-          .eq('user_id', user.id)
-          .eq('type', 'exchange_update')
-          .eq('related_id', data.id)
-          .is('read_at', null);
+      if (user && normalized) {
+        void markSeen(user.id, exchangeSeenKey(normalized), normalized.updated_at > normalized.created_at ? normalized.updated_at : normalized.created_at);
 
-        // Vérifier si l'utilisateur a déjà laissé un avis pour cet échange
-        if (data.status === 'confirmed') {
+        if (normalized.status === 'confirmed') {
           const { data: existingReview } = await supabase
             .from('reviews')
             .select('id')
-            .eq('exchange_id', data.id)
+            .eq('exchange_id', normalized.id)
             .eq('reviewer_id', user.id)
-            .single();
-
+            .maybeSingle();
           setHasReviewed(!!existingReview);
         } else {
           setHasReviewed(false);
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error loading exchange:', err);
       setError('Impossible de charger cet échange.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, user, markSeen]);
 
   useEffect(() => {
     if (id && !hasLoadedRef.current) {
-      loadExchange();
+      void loadExchange();
       hasLoadedRef.current = true;
     }
   }, [id, loadExchange]);
 
-  // Recharger silencieusement quand on revient sur la page
+  // Recharger silencieusement quand on revient sur la page (après signature du contrat, avis…)
   useFocusEffect(
     useCallback(() => {
-      if (id && hasLoadedRef.current) {
-        // Recharger silencieusement si on a déjà chargé une fois
-        loadExchange(true);
-      }
+      if (id && hasLoadedRef.current) void loadExchange(true);
     }, [id, loadExchange])
   );
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadExchange(true);
+    void loadExchange(true);
+  };
+
+  const afterMutation = () => {
+    if (!user) return;
+    useStore.getState().invalidateExchanges(user.id);
+    void useActivityStore.getState().refresh(user.id);
   };
 
   const proposal = exchange?.contract?.proposal;
-  const isFromUser = proposal?.from_user_id === user?.id;
+  const isFrom = proposal?.from_user_id === user?.id;
+  const contract = exchange?.contract;
   const currentStepIndex = steps.findIndex((s) => s.id === exchange?.status);
-  const contractIsActive = exchange?.contract?.status === 'active';
+  const contractIsActive = contract?.status === 'active';
+  const mySignature = isFrom ? contract?.accepted_by_from_at : contract?.accepted_by_to_at;
+  const hasOpenDispute = !!exchange?.dispute && (exchange.dispute.status === 'open' || exchange.dispute.status === 'in_review');
 
   const canMarkAsInProgress = exchange?.status === 'not_started' && contractIsActive;
-  const canMarkAsDelivered = exchange?.status === 'in_progress';
-  const canConfirm = exchange?.status === 'delivered' && exchange?.delivered_by !== user?.id;
-  const canOpenDispute = exchange && (exchange.status === 'delivered' || exchange.status === 'in_progress');
+  const canMarkAsDelivered = exchange?.status === 'in_progress' && !hasOpenDispute;
+  const canConfirm = exchange?.status === 'delivered' && !!exchange.delivered_by && exchange.delivered_by !== user?.id && !hasOpenDispute;
+  const canCancel = exchange?.status === 'not_started' || exchange?.status === 'in_progress';
+  const canOpenDispute = !!exchange && (exchange.status === 'delivered' || exchange.status === 'in_progress') && !hasOpenDispute;
 
   const timelineColors = {
     completedBg: colors.success,
@@ -143,123 +129,76 @@ export default function ExchangeDetailScreen() {
     date: colors.textSecondary,
   };
 
-  async function createExchangeUpdateNotification(status: string) {
-    if (!user || !exchange?.contract?.proposal) return;
+  /** Transition d'état : les règles (qui, quand) sont appliquées par le trigger serveur `guard_exchange_update`. */
+  async function transition(next: ExchangeStatus, successMessage: string) {
+    if (!exchange) return;
+    setActionLoading(true);
+    setError('');
     try {
-      const proposal = exchange.contract.proposal;
-      const otherUserId = proposal.from_user_id === user.id ? proposal.to_user_id : proposal.from_user_id;
-      const statusMessages: Record<string, string> = {
-        in_progress: "L'échange a démarré",
-        delivered: 'Votre échange a été marqué comme livré',
-        confirmed: 'Votre échange a été confirmé',
-      };
-      await supabase.from('notifications').insert({
-        user_id: otherUserId,
-        type: 'exchange_update',
-        message: statusMessages[status] || "Mise à jour de votre échange",
-        related_id: exchange.id,
-      });
+      const { data, error: updateError } = await supabase.from('exchanges').update({ status: next }).eq('id', exchange.id).select('id');
+      if (updateError) throw updateError;
+      if (!data || data.length === 0) throw new Error('Mise à jour refusée : l’échange a peut-être changé de statut.');
+      afterMutation();
+      await loadExchange(true);
+      Alert.alert('Échange', successMessage);
     } catch (err) {
-      console.error('Notification exchange error', err);
-    }
-  }
-
-  async function handleStartExchange() {
-    if (!exchange || !contractIsActive) {
-      setError("Le contrat doit être signé par les deux parties avant de démarrer l'échange.");
-      return;
-    }
-    setActionLoading(true);
-    setError('');
-    try {
-      const { error } = await supabase.from('exchanges').update({ status: 'in_progress' }).eq('id', exchange.id);
-      if (error) throw error;
-      await createExchangeUpdateNotification('in_progress');
-      await loadExchange();
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors du démarrage');
+      setError(errorMessage(err, 'Mise à jour impossible'));
     } finally {
       setActionLoading(false);
     }
   }
 
-  async function handleMarkAsDelivered() {
-    if (!exchange || !user?.id) {
-      setError('Session expirée');
-      return;
-    }
-    setActionLoading(true);
-    setError('');
-    try {
-      const { error } = await supabase
-        .from('exchanges')
-        .update({ status: 'delivered', delivered_at: new Date().toISOString(), delivered_by: user.id })
-        .eq('id', exchange.id);
-      if (error) throw error;
-      await createExchangeUpdateNotification('delivered');
-      await loadExchange();
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la livraison');
-    } finally {
-      setActionLoading(false);
-    }
-  }
+  const handleStartExchange = () => void transition('in_progress', 'Échange démarré.');
 
-  async function handleConfirmDelivery() {
-    if (!exchange || !user?.id) {
-      setError('Session expirée');
-      return;
-    }
-    if (exchange.delivered_by === user.id) {
-      setError('Vous ne pouvez pas confirmer votre propre livraison');
-      return;
-    }
-    setActionLoading(true);
-    setError('');
-    try {
-      const { error } = await supabase
-        .from('exchanges')
-        .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
-        .eq('id', exchange.id);
-      if (error) throw error;
-      await createExchangeUpdateNotification('confirmed');
-      await loadExchange();
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la confirmation');
-    } finally {
-      setActionLoading(false);
-    }
-  }
+  const handleMarkAsDelivered = () =>
+    Alert.alert('Marquer votre part comme livrée ?', 'L’autre partie sera invitée à confirmer la réception.', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Oui, c’est livré', onPress: () => void transition('delivered', 'Livraison déclarée.') },
+    ]);
+
+  const handleConfirmDelivery = () =>
+    Alert.alert('Confirmer la réception ?', 'Cette action clôture l’échange. Vous pourrez ensuite laisser un avis.', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Confirmer', onPress: () => void transition('confirmed', 'Échange confirmé. Merci !') },
+    ]);
+
+  const handleCancel = () =>
+    Alert.alert('Annuler cet échange ?', 'Le contrat sera annulé pour les deux parties.', [
+      { text: 'Garder', style: 'cancel' },
+      { text: 'Annuler l’échange', style: 'destructive', onPress: () => void transition('cancelled', 'Échange annulé.') },
+    ]);
 
   async function handleOpenDispute() {
-    if (!exchange || !disputeReason.trim() || !user) return;
+    if (!exchange || !user) return;
+    const reason = disputeReason.trim();
+    if (reason.length < 10) {
+      setError('Décrivez le problème (10 caractères minimum).');
+      return;
+    }
     setDisputeLoading(true);
     setError('');
     try {
-      const { error } = await supabase.from('disputes').insert({
-        exchange_id: exchange.id,
-        opened_by: user.id,
-        reason: disputeReason,
-        status: 'open',
-      });
+      const moderation = await checkContent(reason, user.id);
+      if (moderation.hasBlock) {
+        setError(blockedMessage(moderation, 'Le texte'));
+        return;
+      }
+      const { error } = await supabase.from('disputes').insert({ exchange_id: exchange.id, opened_by: user.id, reason, status: 'open' });
       if (error) throw error;
       setShowDisputeForm(false);
       setDisputeReason('');
-      await loadExchange();
-    } catch (err: any) {
-      setError(err.message || 'Impossible d’ouvrir un litige');
+      afterMutation();
+      await loadExchange(true);
+      Alert.alert('Litige ouvert', 'Notre équipe va l’examiner.');
+    } catch (err) {
+      setError(errorMessage(err, 'Impossible d’ouvrir un litige'));
     } finally {
       setDisputeLoading(false);
     }
   }
 
-  const otherParty = proposal
-    ? proposal.from_user_id === user?.id
-      ? proposal.to_user
-      : proposal.from_user
-    : null;
+  const otherParty = proposal ? (isFrom ? proposal.to_user : proposal.from_user) : null;
 
-  // Ne pas afficher le loader si on a déjà des données (évite le flash)
   if (loading && !exchange) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -270,15 +209,41 @@ export default function ExchangeDetailScreen() {
     );
   }
 
-  if (!exchange || !proposal) {
+  if (!exchange || !proposal || !contract) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+        <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Suivi de l’échange</Text>
+          <View style={{ width: 24 }} />
+        </View>
         <View style={styles.centerContainer}>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Échange introuvable</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{error || 'Échange introuvable'}</Text>
         </View>
       </SafeAreaView>
     );
   }
+
+  const statusHint = (() => {
+    if (exchange.status === 'cancelled') return 'Cet échange a été annulé. Aucune action n’est possible.';
+    if (exchange.status === 'not_started') {
+      return contractIsActive
+        ? 'Le contrat est signé par les deux parties. Démarrez l’échange dès que vous commencez à honorer votre part.'
+        : mySignature
+          ? `Contrat signé de votre côté. En attente de la signature de ${otherParty?.display_name ?? 'l’autre partie'}.`
+          : 'L’échange démarre une fois le contrat signé par les deux parties.';
+    }
+    if (exchange.status === 'in_progress') return 'Quand vous avez remis votre part, marquez l’échange comme livré. L’autre partie confirmera la réception.';
+    if (exchange.status === 'delivered') {
+      return exchange.delivered_by === user?.id
+        ? 'Vous avez indiqué avoir livré votre part. En attente de confirmation par l’autre partie.'
+        : `${otherParty?.display_name ?? 'L’autre partie'} indique avoir livré. Vérifiez, puis confirmez la réception si tout est conforme. En cas de problème, ouvrez un litige.`;
+    }
+    if (exchange.status === 'confirmed') return 'La réception a été confirmée. Pensez à laisser un avis sur votre partenaire.';
+    return '';
+  })();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -287,22 +252,15 @@ export default function ExchangeDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Suivi de l'échange</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Suivi de l’échange</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView 
-        style={styles.scrollView} 
-        contentContainerStyle={styles.scrollContent} 
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-            colors={[colors.primary]}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
       >
         {error ? (
           <View style={[styles.errorBox, { backgroundColor: colors.errorLight, borderColor: colors.error }]}>
@@ -313,54 +271,55 @@ export default function ExchangeDetailScreen() {
 
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.soft]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Échange avec</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{otherParty?.display_name || 'Utilisateur'}</Text>
+          <TouchableOpacity onPress={() => otherParty && router.push({ pathname: '/user/[id]', params: { id: otherParty.id } })} disabled={!otherParty}>
+            <Text style={[styles.subtitle, { color: colors.primary }]}>{otherParty?.display_name || 'Utilisateur'}</Text>
+          </TouchableOpacity>
+          {proposal.listing?.title ? <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{proposal.listing.title}</Text> : null}
         </View>
 
         {/* Timeline */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.soft]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Statut</Text>
-          <View style={styles.timeline}>
-            {steps.map((step, index) => {
-              const Icon = step.icon;
-              const isCompleted = index < currentStepIndex;
-              const isCurrent = index === currentStepIndex;
-              return (
-                <View key={step.id} style={styles.timelineStep}>
-                  <View
-                    style={[
-                      styles.timelineIcon,
-                      { backgroundColor: timelineColors.idleBg },
-                      isCompleted && { backgroundColor: timelineColors.completedBg },
-                      isCurrent && { backgroundColor: timelineColors.currentBg },
-                    ]}
-                  >
-                    <Icon size={20} color={isCompleted || isCurrent ? '#FFF' : colors.textTertiary} />
-                  </View>
-                  <View style={styles.timelineContent}>
-                    <Text
+          {exchange.status === 'cancelled' ? (
+            <View style={[styles.infoBox, { backgroundColor: colors.errorLight, borderColor: colors.error, marginTop: 8 }]}>
+              <XCircle size={20} color={colors.error} />
+              <Text style={[styles.infoText, { color: colors.error }]}>Échange annulé</Text>
+            </View>
+          ) : (
+            <View style={styles.timeline}>
+              {steps.map((step, index) => {
+                const Icon = step.icon;
+                const isCompleted = index < currentStepIndex;
+                const isCurrent = index === currentStepIndex;
+                return (
+                  <View key={step.id} style={styles.timelineStep}>
+                    <View
                       style={[
-                        styles.timelineLabel,
-                        { color: timelineColors.labelInactive },
-                        (isCompleted || isCurrent) && { color: timelineColors.label },
+                        styles.timelineIcon,
+                        { backgroundColor: timelineColors.idleBg },
+                        isCompleted && { backgroundColor: timelineColors.completedBg },
+                        isCurrent && { backgroundColor: timelineColors.currentBg },
                       ]}
                     >
-                      {step.label}
-                    </Text>
-                    {step.id === 'delivered' && isCurrent && exchange.delivered_at && (
-                      <Text style={[styles.timelineDate, { color: timelineColors.date }]}>
-                        Livré le {new Date(exchange.delivered_at).toLocaleDateString('fr-FR')}
+                      <Icon size={20} color={isCompleted || isCurrent ? '#FFF' : colors.textTertiary} />
+                    </View>
+                    <View style={styles.timelineContent}>
+                      <Text style={[styles.timelineLabel, { color: timelineColors.labelInactive }, (isCompleted || isCurrent) && { color: timelineColors.label }]}>
+                        {step.label}
                       </Text>
-                    )}
-                    {step.id === 'confirmed' && isCompleted && exchange.confirmed_at && (
-                      <Text style={[styles.timelineDate, { color: timelineColors.date }]}>
-                        Confirmé le {new Date(exchange.confirmed_at).toLocaleDateString('fr-FR')}
-                      </Text>
-                    )}
+                      {step.id === 'delivered' && (isCurrent || isCompleted) && exchange.delivered_at && (
+                        <Text style={[styles.timelineDate, { color: timelineColors.date }]}>Livré le {formatDateFr(exchange.delivered_at)}</Text>
+                      )}
+                      {step.id === 'confirmed' && isCurrent && exchange.confirmed_at && (
+                        <Text style={[styles.timelineDate, { color: timelineColors.date }]}>Confirmé le {formatDateFr(exchange.confirmed_at)}</Text>
+                      )}
+                    </View>
                   </View>
-                </View>
-              );
-            })}
-          </View>
+                );
+              })}
+            </View>
+          )}
+          {!!statusHint && <Text style={[styles.hint, { color: colors.textSecondary }]}>{statusHint}</Text>}
         </View>
 
         {/* Due date */}
@@ -371,12 +330,7 @@ export default function ExchangeDetailScreen() {
               <View>
                 <Text style={[styles.dueDateLabel, { color: colors.primary }]}>Date limite</Text>
                 <Text style={[styles.dueDateText, { color: colors.text }]}>
-                  {new Date(exchange.due_date).toLocaleDateString('fr-FR', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
+                  {formatDateFr(exchange.due_date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </Text>
               </View>
             </View>
@@ -384,23 +338,34 @@ export default function ExchangeDetailScreen() {
         )}
 
         {/* Actions */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.soft]}>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, gap: 10 }, shadows.soft]}>
           {exchange.status === 'not_started' && !contractIsActive && (
-            <View
-              style={[
-                styles.warningBox,
-                { backgroundColor: colors.warningLight, borderColor: colors.warning },
-              ]}
-            >
+            <View style={[styles.warningBox, { backgroundColor: colors.warningLight, borderColor: colors.warning }]}>
               <Text style={[styles.warningText, { color: colors.warning }]}>
-                Le contrat doit être signé par les deux parties avant de démarrer l'échange.
+                Le contrat doit être signé par les deux parties avant de démarrer l’échange.
               </Text>
             </View>
           )}
 
+          {hasOpenDispute && (
+            <View style={[styles.warningBox, { backgroundColor: colors.warningLight, borderColor: colors.warning }]}>
+              <Text style={[styles.warningText, { color: colors.warning }]}>Un litige est en cours : les étapes de l’échange sont suspendues jusqu’à sa résolution.</Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.contractButton, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}
+            onPress={() => router.push({ pathname: '/contract/[id]', params: { id: contract.id } })}
+          >
+            <FileText size={20} color={colors.primary} />
+            <Text style={[styles.contractButtonText, { color: colors.primary }]}>
+              {contract.status === 'awaiting_signatures' && !mySignature ? 'Signer le contrat' : 'Voir le contrat'}
+            </Text>
+          </TouchableOpacity>
+
           {canMarkAsInProgress && (
             <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.primary }]} onPress={handleStartExchange} disabled={actionLoading}>
-              {actionLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.actionButtonText}>Démarrer l'échange</Text>}
+              {actionLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.actionButtonText}>Démarrer l’échange</Text>}
             </TouchableOpacity>
           )}
 
@@ -416,7 +381,7 @@ export default function ExchangeDetailScreen() {
             </TouchableOpacity>
           )}
 
-          {canOpenDispute && !exchange.dispute && (
+          {canOpenDispute && (
             <>
               {!showDisputeForm ? (
                 <TouchableOpacity style={[styles.disputeButton, { borderColor: colors.error }]} onPress={() => setShowDisputeForm(true)}>
@@ -425,16 +390,10 @@ export default function ExchangeDetailScreen() {
               ) : (
                 <View style={styles.disputeForm}>
                   <TextInput
-                    style={[
-                      styles.disputeInput,
-                      {
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                        color: colors.text,
-                      },
-                    ]}
+                    style={[styles.disputeInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                     multiline
                     numberOfLines={4}
+                    maxLength={3000}
                     placeholder="Expliquez le problème..."
                     placeholderTextColor={colors.textTertiary}
                     value={disputeReason}
@@ -442,10 +401,7 @@ export default function ExchangeDetailScreen() {
                   />
                   <View style={styles.disputeActions}>
                     <TouchableOpacity
-                      style={[
-                        styles.disputeCancelButton,
-                        { borderColor: colors.border, backgroundColor: colors.surface },
-                      ]}
+                      style={[styles.disputeCancelButton, { borderColor: colors.border, backgroundColor: colors.surface }]}
                       onPress={() => {
                         setShowDisputeForm(false);
                         setDisputeReason('');
@@ -458,11 +414,7 @@ export default function ExchangeDetailScreen() {
                       onPress={handleOpenDispute}
                       disabled={disputeLoading || !disputeReason.trim()}
                     >
-                      {disputeLoading ? (
-                        <ActivityIndicator color="#FFF" />
-                      ) : (
-                        <Text style={styles.disputeSubmitText}>Envoyer</Text>
-                      )}
+                      {disputeLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.disputeSubmitText}>Envoyer</Text>}
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -470,16 +422,9 @@ export default function ExchangeDetailScreen() {
             </>
           )}
 
-          {exchange.contract && (
-            <TouchableOpacity
-              style={[
-                styles.contractButton,
-                { backgroundColor: colors.primaryLight, borderColor: colors.primary },
-              ]}
-              onPress={() => router.push(`/contract/${exchange.contract.id}`)}
-            >
-              <FileText size={20} color={colors.primary} />
-              <Text style={[styles.contractButtonText, { color: colors.primary }]}>Voir et signer le contrat</Text>
+          {canCancel && (
+            <TouchableOpacity style={[styles.disputeButton, { borderColor: colors.border }]} onPress={handleCancel} disabled={actionLoading}>
+              <Text style={[styles.disputeButtonText, { color: colors.textSecondary }]}>Annuler l’échange</Text>
             </TouchableOpacity>
           )}
 
@@ -487,38 +432,29 @@ export default function ExchangeDetailScreen() {
           {exchange.status === 'confirmed' && !hasReviewed && (
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: colors.secondary }]}
-              onPress={() => {
-                // @ts-ignore - Route dynamique
-                router.push(`/review/${exchange.id}`);
-              }}
+              onPress={() => router.push({ pathname: '/review/[exchangeId]', params: { exchangeId: exchange.id } })}
             >
-              <Star size={20} color="#FFF" />
-              <Text style={styles.actionButtonText}>Laisser un avis</Text>
+              <Star size={20} color={colors.onSecondary} />
+              <Text style={[styles.actionButtonText, { color: colors.onSecondary }]}>Laisser un avis</Text>
             </TouchableOpacity>
           )}
 
           {exchange.status === 'confirmed' && hasReviewed && (
             <View style={[styles.infoBox, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
               <CheckCircle size={20} color={colors.success} />
-              <Text style={[styles.infoText, { color: colors.success }]}>
-                Vous avez déjà laissé un avis pour cet échange
-              </Text>
+              <Text style={[styles.infoText, { color: colors.success }]}>Vous avez déjà laissé un avis pour cet échange</Text>
             </View>
           )}
 
           {exchange.dispute && (
-            <View
-              style={[
-                styles.disputeInfo,
-                { backgroundColor: colors.errorLight, borderColor: colors.error },
-              ]}
-            >
+            <View style={[styles.disputeInfo, { backgroundColor: colors.errorLight, borderColor: colors.error }]}>
               <AlertCircle size={20} color={colors.error} />
-              <View>
-                <Text style={[styles.disputeInfoTitle, { color: colors.error }]}>
-                  Litige {exchange.dispute.status === 'resolved' ? 'résolu' : 'en cours'}
-                </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.disputeInfoTitle, { color: colors.error }]}>{DISPUTE_STATUS_LABEL[exchange.dispute.status]}</Text>
                 <Text style={[styles.disputeInfoText, { color: colors.text }]}>{exchange.dispute.reason}</Text>
+                {exchange.dispute.resolution ? (
+                  <Text style={[styles.disputeInfoText, { color: colors.textSecondary }]}>Décision : {exchange.dispute.resolution}</Text>
+                ) : null}
               </View>
             </View>
           )}
@@ -552,6 +488,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 14,
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -591,7 +528,11 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    color: '#3C4856',
+  },
+  hint: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 12,
   },
   timeline: {
     marginTop: 12,
@@ -638,13 +579,9 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 12,
   },
   warningText: {
     fontSize: 14,
-  },
-  actions: {
-    gap: 10,
   },
   actionButton: {
     flexDirection: 'row',
@@ -714,7 +651,6 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    marginTop: 8,
   },
   contractButtonText: {
     fontSize: 15,
@@ -743,7 +679,6 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 8,
   },
   infoText: {
     flex: 1,
@@ -751,5 +686,3 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
-
-

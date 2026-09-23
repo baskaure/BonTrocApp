@@ -1,86 +1,63 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FileText, CheckCircle, Download, ArrowLeft } from 'lucide-react-native';
-import { supabase, Contract } from '@/lib/supabase';
+import { supabase, Contract, MiniProfile, errorMessage } from '@/lib/supabase';
+import { CONTRACT_SELECT } from '@/lib/queries';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
+import { useStore } from '@/lib/store';
+import { useActivityStore } from '@/lib/activity';
+import { formatDateFr } from '@/lib/labels';
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+
+type ContractDetail = Contract & {
+  proposal?: {
+    id: string;
+    listing_id: string;
+    from_user_id: string;
+    to_user_id: string;
+    status: string;
+    from_user?: MiniProfile | null;
+    to_user?: MiniProfile | null;
+    listing?: { id: string; title: string; type: string } | null;
+  } | null;
+};
+
+type SignResult = { status: Contract['status']; accepted_by_from_at: string | null; accepted_by_to_at: string | null; already: boolean };
 
 export default function ContractScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
   const { colors, shadows } = useTheme();
-  const [contract, setContract] = useState<Contract & {
-    proposal?: {
-      from_user_id: string;
-      to_user_id: string;
-      from_user?: { display_name: string };
-      to_user?: { display_name: string };
-    };
-  } | null>(null);
+  const [contract, setContract] = useState<ContractDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [hasReadAndAccepted, setHasReadAndAccepted] = useState(false);
 
-  useEffect(() => {
-    if (id) {
-      loadContract();
-    }
-  }, [id]);
-
-  async function loadContract() {
+  const loadContract = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const { data, error } = await supabase
-        .from('contracts')
-        .select(`
-          *,
-          proposal:proposals(
-            *,
-            from_user:users!proposals_from_user_id_fkey(display_name),
-            to_user:users!proposals_to_user_id_fkey(display_name)
-          )
-        `)
-        .eq('id', id)
-        .single();
-
+      const { data, error } = await supabase.from('contracts').select(CONTRACT_SELECT).eq('id', id).maybeSingle();
       if (error) throw error;
-      setContract(data);
-    } catch (err: any) {
+      setContract((data as unknown as ContractDetail) ?? null);
+    } catch (err) {
       console.error('Error loading contract:', err);
       setError('Impossible de charger ce contrat.');
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
-  const reloadExchangeIfNeeded = async () => {
-    // Trouver l'échange associé à ce contrat pour le recharger
-    if (!contract?.id) return;
-    
-    try {
-      const { data: exchangeData } = await supabase
-        .from('exchanges')
-        .select('id')
-        .eq('contract_id', contract.id)
-        .single();
-
-      if (exchangeData) {
-        // Simplement revenir en arrière, useFocusEffect rechargera silencieusement
-        router.back();
-      }
-    } catch (err) {
-      // Ignorer si l'échange n'existe pas encore
-      console.log('Exchange not found for contract, continuing...');
-    }
-  };
+  useEffect(() => {
+    if (id) void loadContract();
+  }, [id, loadContract]);
 
   if (!contract) {
     if (loading) {
@@ -112,14 +89,13 @@ export default function ContractScreen() {
   const isFromUser = contract.proposal?.from_user_id === user?.id;
   const hasUserAccepted = isFromUser ? !!contract.accepted_by_from_at : !!contract.accepted_by_to_at;
   const hasOtherAccepted = isFromUser ? !!contract.accepted_by_to_at : !!contract.accepted_by_from_at;
-  const otherPartyName = isFromUser
-    ? contract.proposal?.to_user?.display_name
-    : contract.proposal?.from_user?.display_name;
+  const otherPartyName = (isFromUser ? contract.proposal?.to_user?.display_name : contract.proposal?.from_user?.display_name) || 'L’autre partie';
+  const isClosed = contract.status === 'cancelled' || contract.status === 'completed';
 
   async function handleAccept() {
-    if (!contract) return;
+    if (!contract || !user) return;
     if (hasUserAccepted) {
-      setError('Vous avez déjà accepté ce contrat.');
+      setError('Vous avez déjà signé ce contrat.');
       return;
     }
 
@@ -127,57 +103,25 @@ export default function ContractScreen() {
     setError('');
 
     try {
-      const { data: currentContract } = await supabase
-        .from('contracts')
-        .select('accepted_by_from_at, accepted_by_to_at')
-        .eq('id', contract.id)
-        .single();
+      // La signature passe par la RPC serveur : aucun UPDATE direct sur `contracts` n'est accepté.
+      const { data, error: rpcError } = await supabase.rpc('sign_contract', { p_contract_id: contract.id });
+      if (rpcError) throw rpcError;
+      const result = data as SignResult | null;
 
-      if (!currentContract) {
-        throw new Error('Contrat introuvable');
+      useStore.getState().invalidateExchanges(user.id);
+      void useActivityStore.getState().refresh(user.id);
+
+      if (result?.already) {
+        Alert.alert('Contrat', 'Ce contrat n’est plus en attente de signature.');
+      } else if (result?.status === 'active') {
+        Alert.alert('Contrat signé', 'Les deux parties ont signé : l’échange peut démarrer.');
+      } else {
+        Alert.alert('Contrat signé', `Votre signature est enregistrée. En attente de ${otherPartyName}.`);
       }
-
-      const alreadyAccepted = isFromUser 
-        ? !!currentContract.accepted_by_from_at 
-        : !!currentContract.accepted_by_to_at;
-
-      if (alreadyAccepted) {
-        setError('Vous avez déjà accepté ce contrat.');
-        setActionLoading(false);
-        loadContract();
-        return;
-      }
-
-      const updateField = isFromUser ? 'accepted_by_from_at' : 'accepted_by_to_at';
-
-      const { error: updateError } = await supabase
-        .from('contracts')
-        .update({
-          [updateField]: new Date().toISOString(),
-        })
-        .eq('id', contract.id);
-
-      if (updateError) throw updateError;
-
-      const { data: updatedContract } = await supabase
-        .from('contracts')
-        .select('accepted_by_from_at, accepted_by_to_at')
-        .eq('id', contract.id)
-        .single();
-
-      if (updatedContract?.accepted_by_from_at && updatedContract?.accepted_by_to_at) {
-        await supabase
-          .from('contracts')
-          .update({ status: 'active' })
-          .eq('id', contract.id);
-      }
-
-      Alert.alert('Succès', 'Contrat signé avec succès !');
       await loadContract();
-      // Recharger la page échange après signature
-      await reloadExchangeIfNeeded();
+      router.back();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de l\'acceptation');
+      setError(errorMessage(err, 'Erreur lors de la signature'));
     } finally {
       setActionLoading(false);
     }
@@ -188,14 +132,14 @@ export default function ContractScreen() {
     try {
       const htmlContent = `
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Contrat ${contract.id}</title>
 </head>
 <body>
-  ${contract.html_content}
+  ${contract.html_content ?? ''}
 </body>
 </html>
       `;
@@ -210,7 +154,7 @@ export default function ContractScreen() {
           dialogTitle: 'Partager le contrat',
         });
       } else {
-        Alert.alert('Erreur', 'Le partage de fichiers n\'est pas disponible sur cet appareil.');
+        Alert.alert('Erreur', 'Le partage de fichiers n’est pas disponible sur cet appareil.');
       }
     } catch (err) {
       console.error('Error downloading contract:', err);
@@ -227,14 +171,14 @@ export default function ContractScreen() {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <FileText size={20} color={colors.primary} />
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Contrat d'échange</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Contrat d’échange</Text>
         </View>
         <TouchableOpacity onPress={downloadContract} style={styles.downloadButton}>
           <Download size={20} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
@@ -250,6 +194,11 @@ export default function ContractScreen() {
           <Text style={[styles.signatureStatusTitle, { color: colors.primary }]}>
             Statut des signatures électroniques
           </Text>
+          {contract.proposal?.listing?.title ? (
+            <Text style={[styles.signatureText, { color: colors.textSecondary, marginBottom: 8 }]}>
+              Annonce : {contract.proposal.listing.title}
+            </Text>
+          ) : null}
           <View style={styles.signatureRow}>
             {hasUserAccepted ? (
               <CheckCircle size={20} color={colors.success} />
@@ -257,7 +206,7 @@ export default function ContractScreen() {
               <View style={[styles.circle, { borderColor: colors.border }]} />
             )}
             <Text style={[styles.signatureText, { color: colors.text }]}>
-              Vous: {hasUserAccepted ? 'Accepté' : 'En attente'}
+              Vous : {hasUserAccepted ? `signé le ${formatDateFr(isFromUser ? contract.accepted_by_from_at : contract.accepted_by_to_at)}` : 'en attente'}
             </Text>
           </View>
           <View style={styles.signatureRow}>
@@ -267,15 +216,25 @@ export default function ContractScreen() {
               <View style={[styles.circle, { borderColor: colors.border }]} />
             )}
             <Text style={[styles.signatureText, { color: colors.text }]}>
-              {otherPartyName}: {hasOtherAccepted ? 'Accepté' : 'En attente'}
+              {otherPartyName} : {hasOtherAccepted ? `signé le ${formatDateFr(isFromUser ? contract.accepted_by_to_at : contract.accepted_by_from_at)}` : 'en attente'}
             </Text>
           </View>
 
-          {hasUserAccepted && hasOtherAccepted && (
+          {contract.status === 'active' && (
             <View style={[styles.successBox, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
               <Text style={[styles.successText, { color: colors.success }]}>
                 Contrat entièrement signé électroniquement sur BonTroc et désormais actif.
               </Text>
+            </View>
+          )}
+          {contract.status === 'completed' && (
+            <View style={[styles.successBox, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
+              <Text style={[styles.successText, { color: colors.success }]}>Échange terminé : ce contrat est clos.</Text>
+            </View>
+          )}
+          {contract.status === 'cancelled' && (
+            <View style={[styles.successBox, { backgroundColor: colors.errorLight, borderColor: colors.error }]}>
+              <Text style={[styles.successText, { color: colors.error }]}>Ce contrat a été annulé.</Text>
             </View>
           )}
         </View>
@@ -288,7 +247,7 @@ export default function ContractScreen() {
 
           <View style={[styles.contractContent, { backgroundColor: colors.surface, borderColor: colors.border }, shadows.soft]}>
             <WebView
-              source={{ html: contract.html_content }}
+              source={{ html: contract.html_content ?? '<p>Contenu indisponible.</p>' }}
               style={styles.webview}
               scrollEnabled={true}
               showsVerticalScrollIndicator={true}
@@ -298,11 +257,11 @@ export default function ContractScreen() {
 
         {/* Actions */}
         <View style={[styles.actionSection, { borderTopColor: colors.border }]}>
-          {!hasUserAccepted ? (
+          {!hasUserAccepted && !isClosed ? (
             <>
               <View style={[styles.warningBox, { backgroundColor: colors.warningLight, borderColor: colors.warning }]}>
                 <Text style={[styles.warningText, { color: colors.warning }]}>
-                  La signature est réalisée directement sur BonTroc : en cochant la case ci-dessous puis en cliquant sur « Signer le contrat », vous apposez votre signature électronique simple sur ce contrat. Le contrat deviendra actif une fois que les deux parties l'auront signé.
+                  La signature est réalisée directement sur BonTroc : en cochant la case ci-dessous puis en appuyant sur « Signer le contrat », vous apposez votre signature électronique simple sur ce contrat. Le contrat deviendra actif une fois que les deux parties l’auront signé.
                 </Text>
               </View>
 
@@ -311,21 +270,21 @@ export default function ContractScreen() {
                 onPress={() => setHasReadAndAccepted(!hasReadAndAccepted)}
               >
                 <View style={[
-                  styles.checkbox, 
+                  styles.checkbox,
                   { borderColor: colors.border },
                   hasReadAndAccepted && { backgroundColor: colors.success, borderColor: colors.success }
                 ]}>
                   {hasReadAndAccepted && <CheckCircle size={16} color="#FFF" />}
                 </View>
                 <Text style={[styles.checkboxLabel, { color: colors.text }]}>
-                  J'ai lu l'intégralité de ce contrat, j'en comprends les termes et conditions, et je reconnais que mon clic sur le bouton ci-dessous vaut signature électronique et accord ferme sur ce contrat.
+                  J’ai lu l’intégralité de ce contrat, j’en comprends les termes et conditions, et je reconnais que mon appui sur le bouton ci-dessous vaut signature électronique et accord ferme sur ce contrat.
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
-                  styles.signButton, 
-                  { backgroundColor: colors.success }, 
+                  styles.signButton,
+                  { backgroundColor: colors.success },
                   (!hasReadAndAccepted || actionLoading) && styles.signButtonDisabled
                 ]}
                 onPress={handleAccept}
@@ -341,21 +300,21 @@ export default function ContractScreen() {
                 )}
               </TouchableOpacity>
             </>
-          ) : (
+          ) : hasUserAccepted ? (
             <View style={[styles.successBox, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
               <CheckCircle size={20} color={colors.success} />
               <Text style={[styles.successText, { color: colors.success }]}>
-                Vous avez déjà accepté ce contrat
+                Vous avez signé ce contrat
                 {hasOtherAccepted
-                  ? '. L\'échange peut maintenant commencer.'
-                  : '. En attente de l\'acceptation de l\'autre partie.'}
+                  ? '. L’échange peut maintenant commencer.'
+                  : `. En attente de la signature de ${otherPartyName}.`}
               </Text>
             </View>
-          )}
+          ) : null}
 
           <Text style={[styles.contractInfo, { color: colors.textTertiary }]}>
-            Contrat généré le {new Date(contract.created_at).toLocaleDateString('fr-FR')}
-            {'\n'}ID: {contract.id}
+            Contrat généré le {formatDateFr(contract.created_at)}
+            {'\n'}ID : {contract.id}
           </Text>
         </View>
       </ScrollView>
@@ -442,6 +401,7 @@ const styles = StyleSheet.create({
   },
   signatureText: {
     fontSize: 14,
+    flex: 1,
   },
   successBox: {
     marginTop: 12,
@@ -533,4 +493,3 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
-

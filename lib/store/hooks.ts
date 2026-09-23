@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from './index';
-import { Listing, Category, User, Proposal, Exchange, Review, Notification } from '@/lib/supabase';
+import { Listing, Category, PublicProfile, Proposal, Exchange, Review } from '@/lib/supabase';
 import { ListingFilters } from './types';
 
 // Hook pour charger les listings avec cache
@@ -73,10 +73,10 @@ export function useCategories(options?: { autoLoad?: boolean; forceRefresh?: boo
   };
 }
 
-// Hook pour charger un utilisateur avec cache
+// Hook pour charger le profil public d'un membre avec cache
 export function useUser(userId: string | null | undefined, options?: { autoLoad?: boolean; forceRefresh?: boolean }) {
   const { loadUser } = useStore();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(options?.autoLoad !== false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -200,7 +200,7 @@ export function useExchanges(userId: string | null | undefined, options?: { auto
   };
 }
 
-// Hook pour charger les avis avec cache
+// Hook pour charger les avis reçus avec cache
 export function useReviews(userId: string | null | undefined, options?: { autoLoad?: boolean; forceRefresh?: boolean }) {
   const { loadReviews } = useStore();
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -238,87 +238,5 @@ export function useReviews(userId: string | null | undefined, options?: { autoLo
     error,
     refresh: () => fetchReviews(true),
     reload: () => fetchReviews(false),
-  };
-}
-
-// Hook pour charger les notifications avec cache
-export function useNotifications(userId: string | null | undefined, options?: { autoLoad?: boolean; forceRefresh?: boolean }) {
-  const { loadNotifications } = useStore();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(options?.autoLoad !== false);
-  const [error, setError] = useState<Error | null>(null);
-
-  const fetchNotifications = async (forceRefresh = false) => {
-    if (!userId) {
-      setNotifications([]);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await loadNotifications(userId, forceRefresh);
-      setNotifications(data);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Erreur inconnue'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (options?.autoLoad !== false && userId) {
-      fetchNotifications(options?.forceRefresh);
-    }
-  }, [userId, options?.forceRefresh]);
-
-  return {
-    notifications,
-    loading,
-    error,
-    refresh: () => fetchNotifications(true),
-    reload: () => fetchNotifications(false),
-  };
-}
-
-// Hook pour charger le nombre de notifications non lues avec cache
-export function useUnreadCount(userId: string | null | undefined, options?: { autoLoad?: boolean; forceRefresh?: boolean }) {
-  const { loadUnreadCount } = useStore();
-  const [count, setCount] = useState(0);
-  const [loading, setLoading] = useState(options?.autoLoad !== false);
-  const [error, setError] = useState<Error | null>(null);
-
-  const fetchCount = async (forceRefresh = false) => {
-    if (!userId) {
-      setCount(0);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await loadUnreadCount(userId, forceRefresh);
-      setCount(data);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Erreur inconnue'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (options?.autoLoad !== false && userId) {
-      fetchCount(options?.forceRefresh);
-    }
-  }, [userId, options?.forceRefresh]);
-
-  return {
-    count,
-    loading,
-    error,
-    refresh: () => fetchCount(true),
-    reload: () => fetchCount(false),
   };
 }

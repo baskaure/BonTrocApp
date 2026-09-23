@@ -8,15 +8,17 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
-import { supabase } from '@/lib/supabase';
+import { supabase, errorMessage } from '@/lib/supabase';
+import { USERNAME_RE, normalizeUsername } from '@/lib/labels';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormInput } from '@/components/ui/FormInput';
 import { Mail, Lock } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
+// Mot de passe ≥ 8 caractères (réglage Supabase en production, comme le site).
 const authSchema = z.object({
   email: z.string().email('Email invalide'),
-  password: z.string().min(6, 'Le mot de passe doit faire au moins 6 caractères'),
+  password: z.string().min(8, 'Le mot de passe doit faire au moins 8 caractères'),
   displayName: z.string().optional(),
   username: z.string().optional(),
 });
@@ -51,11 +53,12 @@ function GoogleIcon() {
 export default function AuthScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { signIn, signUp, user, loading: authLoading } = useAuth();
+  const { signIn, signUp, requestPasswordReset, user, loading: authLoading } = useAuth();
   const { colors } = useTheme();
   const [mode, setMode] = useState<'login' | 'register'>(params.mode === 'register' ? 'register' : 'login');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const isProcessingOAuth = useRef(false);
 
   const {
@@ -365,17 +368,17 @@ export default function AuthScreen() {
   const onSubmit = async (data: AuthFormData) => {
     if (loading) return;
 
+    const displayName = (data.displayName ?? '').trim();
+    const username = normalizeUsername(data.username ?? '');
+
     if (mode === 'register') {
-      if (!data.displayName || data.displayName.length < 2) {
-        setError('displayName', { message: 'Le nom doit faire au moins 2 caractères' });
+      if (displayName.length < 2 || displayName.length > 60) {
+        setError('displayName', { message: 'Le nom doit faire entre 2 et 60 caractères' });
         return;
       }
-      if (!data.username || data.username.length < 2) {
-        setError('username', { message: "Le nom d'utilisateur doit faire au moins 2 caractères" });
-        return;
-      }
-      if (!/^[a-zA-Z0-9_]+$/.test(data.username)) {
-        setError('username', { message: "Lettres, chiffres et underscores uniquement" });
+      // Même règle que le site et la base : 3 à 30 caractères, minuscules, chiffres, underscores.
+      if (!USERNAME_RE.test(username)) {
+        setError('username', { message: '3 à 30 caractères : lettres minuscules, chiffres et underscores uniquement' });
         return;
       }
     }
@@ -386,14 +389,37 @@ export default function AuthScreen() {
         await signIn(data.email, data.password);
         await new Promise((resolve) => setTimeout(resolve, 500));
       } else {
-        await signUp(data.email, data.password, data.displayName!, data.username!);
-        Alert.alert('Succès', 'Compte créé ! Vous pouvez maintenant vous connecter.');
-        setMode('login');
+        const { needsEmailConfirmation } = await signUp(data.email, data.password, displayName, username);
+        if (needsEmailConfirmation) {
+          Alert.alert(
+            'Vérifiez votre boîte mail',
+            'Un lien de confirmation vient de vous être envoyé. Cliquez dessus, puis connectez-vous ici.',
+          );
+          setMode('login');
+        }
+        // Sinon la session est déjà ouverte : la redirection se fait via le contexte d'authentification.
       }
-    } catch (err: any) {
-      Alert.alert('Erreur', err.message || 'Une erreur est survenue');
+    } catch (err) {
+      Alert.alert('Erreur', errorMessage(err, 'Une erreur est survenue'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const email = (watchedValues.email ?? '').trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('email', { message: 'Saisissez votre adresse e-mail pour recevoir le lien de réinitialisation' });
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await requestPasswordReset(email);
+      Alert.alert('E-mail envoyé', 'Si un compte existe pour cette adresse, un lien de réinitialisation vous a été envoyé. Il ouvre le site bontroc.fr, où vous choisirez un nouveau mot de passe.');
+    } catch (err) {
+      Alert.alert('Erreur', errorMessage(err, 'Envoi impossible pour le moment'));
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -429,8 +455,10 @@ export default function AuthScreen() {
               label="Nom d'utilisateur"
               error={errors.username}
               inputProps={{
-                placeholder: 'username',
+                placeholder: 'pseudo (minuscules, chiffres, _)',
                 autoCapitalize: 'none',
+                autoCorrect: false,
+                maxLength: 30,
                 returnKeyType: 'next',
                 blurOnSubmit: false,
               }}
@@ -465,6 +493,14 @@ export default function AuthScreen() {
             returnKeyType: 'done',
           }}
         />
+
+        {mode === 'login' && (
+          <TouchableOpacity style={styles.forgotButton} onPress={handleForgotPassword} disabled={resetLoading}>
+            <Text style={[styles.forgotButtonText, { color: colors.primary }]}>
+              {resetLoading ? 'Envoi…' : 'Mot de passe oublié ?'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={[
@@ -609,6 +645,16 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: '#FFF',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  forgotButton: {
+    alignSelf: 'flex-end',
+    marginTop: -8,
+    marginBottom: 12,
+    paddingVertical: 4,
+  },
+  forgotButtonText: {
+    fontSize: 13,
     fontWeight: '600',
   },
   switchButton: {

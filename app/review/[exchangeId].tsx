@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { useAuth } from '@/lib/auth-context';
-import { supabase } from '@/lib/supabase';
+import { supabase, Exchange, errorMessage } from '@/lib/supabase';
+import { EXCHANGE_SELECT } from '@/lib/queries';
+import { sendTransactionalEmail } from '@/lib/notifications';
+import { checkContent, blockedMessage } from '@/lib/moderation';
+import { useStore } from '@/lib/store';
+import { useActivityStore } from '@/lib/activity';
 import { ArrowLeft, Star, CheckCircle } from 'lucide-react-native';
 
 const REVIEW_TAGS = [
@@ -23,7 +28,7 @@ export default function ReviewScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { user } = useAuth();
-  const [exchange, setExchange] = useState<any>(null);
+  const [exchange, setExchange] = useState<Exchange | null>(null);
   const [revieweeName, setRevieweeName] = useState('');
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -42,47 +47,39 @@ export default function ReviewScreen() {
   async function loadExchange() {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('exchanges')
-        .select(`
-          *,
-          contract:contracts(
-            proposal:proposals(
-              from_user_id,
-              to_user_id,
-              from_user:users!proposals_from_user_id_fkey(display_name),
-              to_user:users!proposals_to_user_id_fkey(display_name)
-            )
-          )
-        `)
-        .eq('id', exchangeId)
-        .single();
-
+      const { data, error } = await supabase.from('exchanges').select(EXCHANGE_SELECT).eq('id', exchangeId).maybeSingle();
       if (error) throw error;
+      const loaded = (data as unknown as Exchange) ?? null;
+      setExchange(loaded);
 
-      setExchange(data);
-
-      // Déterminer qui est l'autre partie
-      const proposal = data?.contract?.proposal;
+      // Déterminer qui est l'autre partie (profils publics)
+      const proposal = loaded?.contract?.proposal;
       if (proposal && user) {
-        const otherUserId = proposal.from_user_id === user.id ? proposal.to_user_id : proposal.from_user_id;
         const otherUser = proposal.from_user_id === user.id ? proposal.to_user : proposal.from_user;
         setRevieweeName(otherUser?.display_name || 'Utilisateur');
       }
 
-      // Vérifier si l'utilisateur a déjà laissé un avis
-      const { data: existingReview } = await supabase
-        .from('reviews')
-        .select('id')
-        .eq('exchange_id', exchangeId)
-        .eq('reviewer_id', user?.id)
-        .single();
-
-      if (existingReview) {
-        Alert.alert('Avis déjà laissé', 'Vous avez déjà laissé un avis pour cet échange.');
+      if (loaded && loaded.status !== 'confirmed') {
+        Alert.alert('Avis impossible', 'L’échange doit être confirmé avant de laisser un avis.');
         router.back();
+        return;
       }
-    } catch (err: any) {
+
+      // Vérifier si l'utilisateur a déjà laissé un avis (un seul par échange et par auteur)
+      if (user) {
+        const { data: existingReview } = await supabase
+          .from('reviews')
+          .select('id')
+          .eq('exchange_id', exchangeId)
+          .eq('reviewer_id', user.id)
+          .maybeSingle();
+
+        if (existingReview) {
+          Alert.alert('Avis déjà laissé', 'Vous avez déjà laissé un avis pour cet échange.');
+          router.back();
+        }
+      }
+    } catch (err) {
       console.error('Error loading exchange:', err);
       setError('Impossible de charger l\'échange.');
     } finally {
@@ -117,43 +114,43 @@ export default function ReviewScreen() {
       }
 
       const revieweeId = proposal.from_user_id === user.id ? proposal.to_user_id : proposal.from_user_id;
+      const text = comment.trim();
+      if (text) {
+        const moderation = await checkContent(text, user.id);
+        if (moderation.hasBlock) {
+          setError(blockedMessage(moderation, 'Votre commentaire'));
+          return;
+        }
+      }
 
       const { error: reviewError } = await supabase.from('reviews').insert({
         exchange_id: exchange.id,
         reviewer_id: user.id,
         reviewee_id: revieweeId,
         rating,
-        comment: comment.trim() || null,
+        comment: text || null,
         tags: selectedTags,
       });
 
       if (reviewError) throw reviewError;
 
-      // Mettre à jour la note moyenne de l'utilisateur
-      const { data: existingReviews } = await supabase
-        .from('reviews')
-        .select('rating')
-        .eq('reviewee_id', revieweeId);
+      // La note moyenne est recalculée par le serveur (trigger sur reviews) ; on invalide les caches.
+      useStore.getState().clearUserCache(revieweeId);
+      useStore.getState().invalidateExchanges(user.id);
+      void useActivityStore.getState().refresh(user.id);
 
-      if (existingReviews) {
-        const totalRating = existingReviews.reduce((sum, r) => sum + r.rating, 0);
-        const avgRating = totalRating / existingReviews.length;
-
-        await supabase
-          .from('users')
-          .update({
-            rating_avg: avgRating,
-            rating_count: existingReviews.length,
-          })
-          .eq('id', revieweeId);
-      }
+      void sendTransactionalEmail('new_review', revieweeId, {
+        reviewer_name: user.display_name,
+        rating: rating.toString(),
+        exchange_id: exchange.id,
+      });
 
       setSuccess(true);
       setTimeout(() => {
         router.back();
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'envoi de l\'avis');
+    } catch (err) {
+      setError(errorMessage(err, 'Erreur lors de l\'envoi de l\'avis'));
     } finally {
       setSubmitting(false);
     }
@@ -204,7 +201,7 @@ export default function ReviewScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Text style={[styles.description, { color: colors.text }]}>
-            Comment s'est passé votre échange avec <Text style={styles.bold}>{revieweeName}</Text> ?
+            Comment s’est passé votre échange avec <Text style={styles.bold}>{revieweeName}</Text> ?
           </Text>
 
           <View style={styles.ratingSection}>
@@ -265,6 +262,7 @@ export default function ReviewScreen() {
               ]}
               multiline
               numberOfLines={4}
+              maxLength={1500}
               placeholder="Partagez votre expérience avec la communauté..."
               value={comment}
               onChangeText={setComment}
@@ -304,7 +302,7 @@ export default function ReviewScreen() {
             {submitting ? (
               <ActivityIndicator color="#FFF" />
             ) : (
-              <Text style={styles.submitButtonText}>Publier l'avis</Text>
+              <Text style={styles.submitButtonText}>Publier l’avis</Text>
             )}
           </TouchableOpacity>
         </View>

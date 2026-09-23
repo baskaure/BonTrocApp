@@ -1,16 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image, Keyboard, TouchableWithoutFeedback } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/lib/auth-context';
-import { supabase, Proposal } from '@/lib/supabase';
-import { ArrowLeft, MessageCircle, CheckCircle, XCircle, Send, Lightbulb, FileText } from 'lucide-react-native';
+import { supabase, Proposal, errorMessage } from '@/lib/supabase';
+import { PROPOSAL_SELECT } from '@/lib/queries';
+import { sendTransactionalEmail } from '@/lib/notifications';
+import { checkContent, blockedMessage } from '@/lib/moderation';
+import { PROPOSAL_STATUS_LABEL } from '@/lib/labels';
+import { useStore } from '@/lib/store';
+import { useActivityStore, proposalSeenKey } from '@/lib/activity';
+import { ArrowLeft, MessageCircle, CheckCircle, XCircle, Send, Lightbulb, FileText, ArrowLeftRight } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { ChatWindow } from '@/components/ChatWindow';
 import { FormInput } from '@/components/ui/FormInput';
 import { counterProposalSchema, CounterProposalFormData } from '@/lib/validations/proposal';
+
+/** Lit le message d'erreur renvoyé par une Edge Function (corps JSON `{ error }`), sinon un repli. */
+async function functionErrorMessage(error: unknown, fallback: string): Promise<string> {
+  const ctx = (error as { context?: { json?: () => Promise<{ error?: string }> } } | null)?.context;
+  try {
+    const body = await ctx?.json?.();
+    if (body?.error) return body.error;
+  } catch {
+    /* corps non JSON */
+  }
+  return fallback;
+}
 
 export default function ProposalDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -18,11 +36,14 @@ export default function ProposalDetailScreen() {
   const router = useRouter();
   const { colors, radius, shadows } = useTheme();
   const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [exchangeId, setExchangeId] = useState<string | null>(null);
+  const [contractId, setContractId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCounterForm, setShowCounterForm] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
+  const markSeen = useActivityStore((s) => s.markSeen);
 
   const {
     control,
@@ -34,60 +55,60 @@ export default function ProposalDetailScreen() {
     defaultValues: { counterOffer: '', counterMessage: '' },
   });
 
-  useEffect(() => {
-    if (id) {
-      loadProposal();
-    }
-  }, [id]);
-
-  async function loadProposal() {
-    setLoading(true);
+  const loadProposal = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase
-        .from('proposals')
-        .select(`
-          *,
-          from_user:users!proposals_from_user_id_fkey(*),
-          to_user:users!proposals_to_user_id_fkey(*),
-          listing:listings(*)
-        `)
-        .eq('id', id)
-        .single();
-
+      const { data, error } = await supabase.from('proposals').select(PROPOSAL_SELECT).eq('id', id).maybeSingle();
       if (error) throw error;
-      setProposal(data);
+      const next = (data as unknown as Proposal) ?? null;
+      setProposal(next);
 
-      // Marquer les notifications liées à cette proposition comme lues
-      if (data && user) {
-        try {
-          const { data: updated, error: updateError } = await supabase
-            .from('notifications')
-            .update({ read_at: new Date().toISOString() })
-            .eq('user_id', user.id)
-            .eq('related_id', data.id)
-            .in('type', ['proposal_received', 'message_received'])
-            .is('read_at', null)
-            .select();
-          
-          if (updateError && updateError.code !== 'PGRST205') {
-            console.error('Error marking notifications as read:', updateError);
-          } else if (updated && updated.length > 0) {
-            console.log(`Marked ${updated.length} notifications as read for proposal ${data.id}`);
-          }
-        } catch (err: any) {
-          if (err?.code !== 'PGRST205') {
-            console.error('Error in mark as read:', err);
-          }
-        }
+      if (next && user) {
+        void markSeen(user.id, proposalSeenKey(next), next.updated_at > next.created_at ? next.updated_at : next.created_at);
       }
-    } catch (error) {
-      console.error('Error loading proposal:', error);
+
+      // Proposition acceptée : on retrouve le contrat et l'échange créés par le serveur.
+      if (next?.status === 'accepted') {
+        const { data: contract } = await supabase
+          .from('contracts')
+          .select('id, exchange:exchanges(id)')
+          .eq('proposal_id', next.id)
+          .order('version', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const ex = contract?.exchange as unknown as { id: string }[] | { id: string } | null;
+        setContractId(contract?.id ?? null);
+        setExchangeId(Array.isArray(ex) ? (ex[0]?.id ?? null) : (ex?.id ?? null));
+      } else {
+        setContractId(null);
+        setExchangeId(null);
+      }
+    } catch (err) {
+      console.error('Error loading proposal:', err);
       setError('Impossible de charger cette proposition.');
     } finally {
       setLoading(false);
     }
-  }
+  }, [id, user, markSeen]);
+
+  useEffect(() => {
+    if (id) void loadProposal();
+  }, [id, loadProposal]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (id && proposal) void loadProposal(true);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id]),
+  );
+
+  const afterMutation = () => {
+    if (!user) return;
+    useStore.getState().invalidateProposals(user.id);
+    useStore.getState().invalidateExchanges(user.id);
+    void useActivityStore.getState().refresh(user.id);
+  };
 
   if (loading) {
     return (
@@ -99,7 +120,7 @@ export default function ProposalDetailScreen() {
     );
   }
 
-  if (!proposal) {
+  if (!proposal || !user) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
@@ -116,148 +137,155 @@ export default function ProposalDetailScreen() {
     );
   }
 
-  const isReceiver = proposal.to_user_id === user?.id;
+  const isReceiver = proposal.to_user_id === user.id;
+  const isSender = proposal.from_user_id === user.id;
   const otherUser = isReceiver ? proposal.from_user : proposal.to_user;
+  const otherInactive = otherUser?.status === 'deleted';
+  const listingUnavailable = !!proposal.listing && proposal.listing.status !== 'published';
 
-  const handleAccept = async () => {
+  const handleAccept = () => {
     Alert.alert(
       'Accepter la proposition',
-      'Êtes-vous sûr de vouloir accepter cette proposition ? Un contrat sera généré.',
+      'Un contrat d’échange sera généré et devra être signé par les deux parties.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'Accepter',
-          style: 'default',
           onPress: async () => {
             setActionError('');
             setActionLoading(true);
             try {
-              const { error: updateError } = await supabase
-                .from('proposals')
-                .update({ status: 'accepted' })
-                .eq('id', proposal.id);
+              // L'acceptation est atomique côté serveur : contrat + échange + statut + e-mails.
+              const { data, error: fnError } = await supabase.functions.invoke('accept-proposal', { body: { proposal_id: proposal.id } });
+              if (fnError) throw new Error(await functionErrorMessage(fnError, 'Acceptation impossible pour le moment'));
+              if (data?.error) throw new Error(String(data.error));
 
-              if (updateError) throw updateError;
-
-              // Créer une notification
-              if (proposal.from_user_id !== user?.id) {
-                try {
-                  await supabase.from('notifications').insert({
-                    user_id: proposal.from_user_id,
-                    type: 'proposal_accepted',
-                    message: `${proposal.to_user?.display_name || 'Un utilisateur'} a accepté votre proposition`,
-                    related_id: proposal.id,
-                  });
-                } catch (err) {
-                  console.error('Error creating notification:', err);
-                }
-              }
-
-              // Générer le contrat
-              try {
-                await supabase.functions.invoke('generate-contract-pdf', {
-                  body: { proposal_id: proposal.id },
-                });
-              } catch (contractError) {
-                console.error('Error generating contract:', contractError);
-              }
-
-              Alert.alert('Succès', 'Proposition acceptée ! Le contrat a été généré.');
-              await loadProposal();
-            } catch (err: any) {
-              setActionError(err.message || 'Erreur lors de l\'acceptation');
-              Alert.alert('Erreur', err.message || 'Erreur lors de l\'acceptation');
+              afterMutation();
+              await loadProposal(true);
+              const newContractId = typeof data?.contract_id === 'string' ? data.contract_id : null;
+              Alert.alert('Proposition acceptée', 'Le contrat est prêt : signez-le pour lancer l’échange.', [
+                { text: 'Plus tard', style: 'cancel' },
+                { text: 'Signer le contrat', onPress: () => newContractId && router.push({ pathname: '/contract/[id]', params: { id: newContractId } }) },
+              ]);
+            } catch (err) {
+              const message = errorMessage(err, 'Erreur lors de l’acceptation');
+              setActionError(message);
+              Alert.alert('Erreur', message);
             } finally {
               setActionLoading(false);
             }
           },
         },
-      ]
+      ],
     );
   };
 
-  const handleRefuse = async () => {
-    Alert.alert(
-      'Refuser la proposition',
-      'Êtes-vous sûr de vouloir refuser cette proposition ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Refuser',
-          style: 'destructive',
-          onPress: async () => {
-            setActionLoading(true);
-            try {
-              const { error } = await supabase
-                .from('proposals')
-                .update({ status: 'refused' })
-                .eq('id', proposal.id);
-
-              if (error) throw error;
-              await loadProposal();
-              Alert.alert('Proposition refusée', 'La proposition a été refusée.');
-            } catch (error: any) {
-              Alert.alert('Erreur', error.message || 'Erreur lors du refus');
-            } finally {
-              setActionLoading(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleCounter = async (data: CounterProposalFormData) => {
+  const setStatus = async (status: 'refused' | 'cancelled', from: Proposal['status'][], successTitle: string, successText: string) => {
     setActionLoading(true);
     setActionError('');
     try {
-      const { error } = await supabase.from('proposals').insert({
-        listing_id: proposal.listing_id,
-        from_user_id: user!.id,
-        to_user_id: otherUser!.id,
-        message: data.counterMessage,
-        offer_payload: { description: data.counterOffer },
-        status: 'pending',
-        parent_proposal_id: proposal.id,
-      });
+      // RLS et triggers peuvent refuser sans erreur (0 ligne) : on vérifie le retour.
+      const { data, error } = await supabase.from('proposals').update({ status, updated_at: new Date().toISOString() }).eq('id', proposal.id).in('status', from).select('id');
+      if (error) throw error;
+      if (!data?.length) throw new Error('Mise à jour refusée : la proposition a peut-être changé de statut.');
+      afterMutation();
+      await loadProposal(true);
+      Alert.alert(successTitle, successText);
+    } catch (err) {
+      const message = errorMessage(err);
+      setActionError(message);
+      Alert.alert('Erreur', message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
+  const handleRefuse = () => {
+    Alert.alert('Refuser la proposition', 'Êtes-vous sûr de vouloir refuser cette proposition ?', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Refuser', style: 'destructive', onPress: () => void setStatus('refused', ['pending'], 'Proposition refusée', 'La proposition a été refusée.') },
+    ]);
+  };
+
+  const handleCancel = () => {
+    Alert.alert('Retirer la proposition', 'Votre proposition sera annulée. Vous pourrez en faire une nouvelle plus tard.', [
+      { text: 'Garder', style: 'cancel' },
+      { text: 'Retirer', style: 'destructive', onPress: () => void setStatus('cancelled', ['pending', 'countered'], 'Proposition retirée', 'Votre proposition a été annulée.') },
+    ]);
+  };
+
+  const handleCounter = async (data: CounterProposalFormData) => {
+    if (!otherUser) return;
+    setActionLoading(true);
+    setActionError('');
+    try {
+      const offer = data.counterOffer.trim();
+      const message = (data.counterMessage ?? '').trim();
+      const moderation = await checkContent(`${offer}\n${message}`, user.id);
+      if (moderation.hasBlock) {
+        setActionError(blockedMessage(moderation, 'Le texte'));
+        return;
+      }
+
+      const { data: created, error } = await supabase
+        .from('proposals')
+        .insert({
+          listing_id: proposal.listing_id,
+          from_user_id: user.id,
+          to_user_id: otherUser.id,
+          message,
+          offer_payload: { description: offer },
+          status: 'pending',
+          parent_proposal_id: proposal.id,
+        })
+        .select('id')
+        .single();
       if (error) throw error;
 
-      await supabase
-        .from('proposals')
-        .update({ status: 'countered' })
-        .eq('id', proposal.id);
+      const { error: updErr } = await supabase.from('proposals').update({ status: 'countered', updated_at: new Date().toISOString() }).eq('id', proposal.id).eq('status', 'pending');
+      if (updErr) console.warn('Statut de la proposition parente non mis à jour :', updErr.message);
+
+      void sendTransactionalEmail('counter_proposal', otherUser.id, {
+        listing_title: proposal.listing?.title ?? 'votre annonce',
+        counter_proposer_name: user.display_name,
+        proposal_id: created.id,
+      });
 
       setShowCounterForm(false);
       reset({ counterOffer: '', counterMessage: '' });
-      await loadProposal();
-      Alert.alert('Succès', 'Contre-proposition envoyée !');
-    } catch (error: any) {
-      setActionError(error.message || 'Erreur lors de la contre-proposition');
-      Alert.alert('Erreur', error.message || 'Erreur lors de la contre-proposition');
+      afterMutation();
+      Alert.alert('Contre-proposition envoyée', 'Votre interlocuteur va pouvoir y répondre.', [
+        { text: 'OK', onPress: () => router.replace({ pathname: '/proposal/[id]', params: { id: created.id } }) },
+      ]);
+    } catch (err) {
+      const message = errorMessage(err, 'Erreur lors de la contre-proposition');
+      setActionError(message);
+      Alert.alert('Erreur', message);
     } finally {
       setActionLoading(false);
     }
   };
 
   const getStatusConfig = () => {
+    const label = PROPOSAL_STATUS_LABEL[proposal.status];
     switch (proposal.status) {
       case 'accepted':
-        return { label: 'Acceptée', color: colors.success, bgColor: colors.successLight };
+        return { label, color: colors.success, bgColor: colors.successLight };
       case 'refused':
-        return { label: 'Refusée', color: colors.error, bgColor: colors.errorLight };
+      case 'cancelled':
+        return { label, color: colors.error, bgColor: colors.errorLight };
       case 'countered':
-        return { label: 'Contre-proposition', color: colors.warning, bgColor: colors.warningLight };
+        return { label, color: colors.warning, bgColor: colors.warningLight };
       default:
-        return { label: 'En attente', color: colors.warning, bgColor: colors.warningLight };
+        return { label, color: colors.warning, bgColor: colors.warningLight };
     }
   };
 
   const statusConfig = getStatusConfig();
+  const canAct = proposal.status === 'pending' && isReceiver && !showCounterForm && !otherInactive && !listingUnavailable;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      {/* Header amélioré */}
       <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={colors.text} />
@@ -268,20 +296,18 @@ export default function ProposalDetailScreen() {
           </Text>
           <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
             <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
-            <Text style={[styles.statusText, { color: statusConfig.color }]}>
-              {statusConfig.label}
-            </Text>
+            <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
           </View>
         </View>
         <View style={{ width: 40 }} />
       </View>
 
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -289,50 +315,31 @@ export default function ProposalDetailScreen() {
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View>
-              {/* Carte de proposition améliorée */}
               <View style={[styles.proposalCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, shadows.card]}>
                 {/* Informations utilisateur */}
                 <View style={styles.userSection}>
-                  <View style={styles.userInfo}>
+                  <TouchableOpacity
+                    style={styles.userInfo}
+                    onPress={() => otherUser && !otherInactive && router.push({ pathname: '/user/[id]', params: { id: otherUser.id } })}
+                    disabled={!otherUser || otherInactive}
+                  >
                     {otherUser?.avatar_url ? (
-                      <Image
-                        source={{ uri: otherUser.avatar_url }}
-                        style={[styles.avatar, { borderColor: colors.surface }]}
-                      />
+                      <Image source={{ uri: otherUser.avatar_url }} style={[styles.avatar, { borderColor: colors.surface }]} />
                     ) : (
                       <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary, borderColor: colors.surface }]}>
-                        <Text style={styles.avatarText}>
-                          {otherUser?.display_name?.[0]?.toUpperCase() || '?'}
-                        </Text>
+                        <Text style={styles.avatarText}>{otherUser?.display_name?.[0]?.toUpperCase() || '?'}</Text>
                       </View>
                     )}
                     <View style={styles.userDetails}>
-                      <Text style={[styles.userName, { color: colors.text }]}>
-                        {otherUser?.display_name || 'Utilisateur'}
-                      </Text>
+                      <Text style={[styles.userName, { color: colors.text }]}>{otherUser?.display_name || 'Utilisateur'}</Text>
                       <Text style={[styles.userMeta, { color: colors.textSecondary }]}>
                         {isReceiver ? 'Vous a fait une proposition' : 'Vous avez fait une proposition'}
+                        {proposal.parent_proposal_id ? ' (contre-proposition)' : ''}
                       </Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                   <Text style={[styles.dateText, { color: colors.textTertiary }]}>
-                    {new Date(proposal.created_at).toLocaleDateString('fr-FR', {
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </Text>
-                </View>
-
-                {/* Message de la proposition */}
-                <View style={[styles.messageSection, { borderTopColor: colors.border }]}>
-                  <View style={styles.sectionHeader}>
-                    <FileText size={16} color={colors.primary} />
-                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Message</Text>
-                  </View>
-                  <Text style={[styles.messageText, { color: colors.text }]}>
-                    {proposal.message}
+                    {new Date(proposal.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
 
@@ -343,53 +350,95 @@ export default function ProposalDetailScreen() {
                       <Lightbulb size={16} color={colors.warning} fill={colors.warning} />
                       <Text style={[styles.sectionTitle, { color: colors.text }]}>Ce qui est proposé</Text>
                     </View>
-                    <View style={[styles.offerBox, { backgroundColor: colors.primaryLight }]}>
-                      <Text style={[styles.offerText, { color: colors.text }]}>
-                        {proposal.offer_payload.description}
+                    <View style={[styles.offerBox, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
+                      <Text style={[styles.offerText, { color: colors.text }]}>{proposal.offer_payload.description}</Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Message de la proposition */}
+                {!!proposal.message && (
+                  <View style={[styles.messageSection, { borderTopColor: colors.border }]}>
+                    <View style={styles.sectionHeader}>
+                      <FileText size={16} color={colors.primary} />
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>Message</Text>
+                    </View>
+                    <Text style={[styles.messageText, { color: colors.text }]}>{proposal.message}</Text>
+                  </View>
+                )}
+
+                {(otherInactive || listingUnavailable) && proposal.status === 'pending' && (
+                  <View style={[styles.actionsSection, { borderTopColor: colors.border }]}>
+                    <View style={[styles.errorBox, { backgroundColor: colors.warningLight }]}>
+                      <Text style={[styles.errorText, { color: colors.warning }]}>
+                        {otherInactive ? 'Le compte de votre interlocuteur n’est plus actif.' : 'Cette annonce n’est plus disponible : elle a été retirée ou déjà échangée.'}
                       </Text>
                     </View>
                   </View>
                 )}
 
-                {/* Boutons d'action - seulement si on est le receveur et que c'est en attente */}
-                {proposal.status === 'pending' && isReceiver && !showCounterForm && (
+                {/* Actions du destinataire */}
+                {canAct && (
                   <View style={[styles.actionsSection, { borderTopColor: colors.border }]}>
-                    {actionError && (
+                    {!!actionError && (
                       <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
                         <Text style={[styles.errorText, { color: colors.error }]}>{actionError}</Text>
                       </View>
                     )}
                     <View style={styles.actionButtons}>
-                      <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: colors.success }]}
-                        onPress={handleAccept}
-                        disabled={actionLoading}
-                      >
-                        {actionLoading ? (
-                          <ActivityIndicator color="#FFF" size="small" />
-                        ) : (
+                      <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.success }]} onPress={handleAccept} disabled={actionLoading}>
+                        {actionLoading ? <ActivityIndicator color="#FFF" size="small" /> : (
                           <>
                             <CheckCircle size={18} color="#FFF" />
                             <Text style={styles.actionButtonText}>Accepter</Text>
                           </>
                         )}
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: colors.warning }]}
-                        onPress={() => setShowCounterForm(true)}
-                        disabled={actionLoading}
-                      >
+                      <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.warning }]} onPress={() => setShowCounterForm(true)} disabled={actionLoading}>
                         <Send size={18} color="#FFF" />
                         <Text style={styles.actionButtonText}>Contre-proposer</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: colors.error }]}
-                        onPress={handleRefuse}
-                        disabled={actionLoading}
-                      >
+                      <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.error }]} onPress={handleRefuse} disabled={actionLoading}>
                         <XCircle size={18} color="#FFF" />
                         <Text style={styles.actionButtonText}>Refuser</Text>
                       </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* Action de l'expéditeur : retirer sa proposition */}
+                {isSender && (proposal.status === 'pending' || proposal.status === 'countered') && (
+                  <View style={[styles.actionsSection, { borderTopColor: colors.border }]}>
+                    {!!actionError && (
+                      <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
+                        <Text style={[styles.errorText, { color: colors.error }]}>{actionError}</Text>
+                      </View>
+                    )}
+                    <Text style={[styles.userMeta, { color: colors.textSecondary, marginBottom: 10 }]}>
+                      {proposal.status === 'countered' ? 'Vous avez reçu une contre-proposition : consultez-la dans vos propositions.' : 'En attente de réponse.'}
+                    </Text>
+                    <TouchableOpacity style={[styles.counterActionButton, { backgroundColor: colors.surface, borderColor: colors.error }]} onPress={handleCancel} disabled={actionLoading}>
+                      {actionLoading ? <ActivityIndicator color={colors.error} size="small" /> : <Text style={[styles.counterActionText, { color: colors.error }]}>Retirer ma proposition</Text>}
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Proposition acceptée : accès au contrat et au suivi */}
+                {proposal.status === 'accepted' && (
+                  <View style={[styles.actionsSection, { borderTopColor: colors.border }]}>
+                    <View style={styles.actionButtons}>
+                      {contractId && (
+                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.primary }]} onPress={() => router.push({ pathname: '/contract/[id]', params: { id: contractId } })}>
+                          <FileText size={18} color="#FFF" />
+                          <Text style={styles.actionButtonText}>Voir / signer le contrat</Text>
+                        </TouchableOpacity>
+                      )}
+                      {exchangeId && (
+                        <TouchableOpacity style={[styles.counterActionButton, { backgroundColor: colors.surface, borderColor: colors.primary }]} onPress={() => router.push({ pathname: '/exchange/[id]', params: { id: exchangeId } })}>
+                          <ArrowLeftRight size={16} color={colors.primary} />
+                          <Text style={[styles.counterActionText, { color: colors.primary }]}>Suivre l’échange</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 )}
@@ -417,7 +466,7 @@ export default function ProposalDetailScreen() {
                     <FormInput
                       control={control}
                       name="counterMessage"
-                      label="Message *"
+                      label="Message (facultatif)"
                       error={errors.counterMessage}
                       inputProps={{
                         multiline: true,
@@ -428,7 +477,7 @@ export default function ProposalDetailScreen() {
                         style: { minHeight: 80, textAlignVertical: 'top' },
                       }}
                     />
-                    {actionError && (
+                    {!!actionError && (
                       <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
                         <Text style={[styles.errorText, { color: colors.error }]}>{actionError}</Text>
                       </View>
@@ -445,13 +494,11 @@ export default function ProposalDetailScreen() {
                         <Text style={[styles.counterActionText, { color: colors.text }]}>Annuler</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.counterActionButton, { backgroundColor: colors.primary }]}
+                        style={[styles.counterActionButton, { backgroundColor: colors.primary, borderColor: colors.primary }]}
                         onPress={handleSubmit(handleCounter)}
                         disabled={actionLoading}
                       >
-                        {actionLoading ? (
-                          <ActivityIndicator color="#FFF" size="small" />
-                        ) : (
+                        {actionLoading ? <ActivityIndicator color="#FFF" size="small" /> : (
                           <>
                             <Send size={16} color="#FFF" />
                             <Text style={styles.counterActionTextPrimary}>Envoyer</Text>
@@ -470,7 +517,12 @@ export default function ProposalDetailScreen() {
                   <Text style={[styles.chatHeaderText, { color: colors.text }]}>Discussion</Text>
                 </View>
                 <View style={styles.chatContainer}>
-                  <ChatWindow proposalId={proposal.id} />
+                  <ChatWindow
+                    proposalId={proposal.id}
+                    counterpart={otherUser ?? null}
+                    disabled={otherInactive}
+                    onUserClick={(userId) => router.push({ pathname: '/user/[id]', params: { id: userId } })}
+                  />
                 </View>
               </View>
             </View>
@@ -646,22 +698,6 @@ const styles = StyleSheet.create({
   counterForm: {
     padding: 16,
     borderTopWidth: 1,
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  formLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  textArea: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    minHeight: 80,
-    textAlignVertical: 'top',
   },
   errorBox: {
     padding: 12,

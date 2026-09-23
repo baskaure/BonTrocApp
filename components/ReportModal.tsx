@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, ActivityIn
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X, AlertTriangle } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
+import { supabase, errorMessage } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
 import { FormInput } from './ui/FormInput';
@@ -51,10 +51,11 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
     setLoading(true);
 
     try {
-      const reportData: any = {
+      // Le statut est forcé à `pending` par le serveur ; 10 signalements max par jour et par membre.
+      const reportData: Record<string, string | undefined> = {
         reporter_id: user.id,
         reason: data.reason,
-        details: data.details || undefined,
+        details: data.details?.trim() || undefined,
       };
 
       if (targetUserId) {
@@ -83,8 +84,8 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
         onClose();
         setSuccess(false);
       }, 2000);
-    } catch (err: any) {
-      Alert.alert('Erreur', err.message || 'Erreur lors de l\'envoi du signalement');
+    } catch (err) {
+      Alert.alert('Erreur', errorMessage(err, 'Erreur lors de l\'envoi du signalement'));
     } finally {
       setLoading(false);
     }
@@ -173,6 +174,7 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
                 inputProps={{
                   multiline: true,
                   numberOfLines: 3,
+                  maxLength: 2000,
                   placeholder: 'Décrivez le problème...',
                   style: { minHeight: 100, textAlignVertical: 'top' },
                 }}

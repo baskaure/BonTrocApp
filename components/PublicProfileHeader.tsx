@@ -2,17 +2,14 @@ import React, { useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, LayoutChangeEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/lib/theme';
-import { ArrowLeft, MapPin, Calendar, Star } from 'lucide-react-native';
-import { User, Review } from '@/lib/supabase';
+import { ArrowLeft, MapPin, Calendar, Star, ShieldCheck, Lock } from 'lucide-react-native';
+import { PublicProfile, Review } from '@/lib/supabase';
 import { useHeaderHeightStore } from '@/lib/store/headerHeight';
 
-type ReviewWithReviewer = Review & {
-  reviewer?: { display_name: string; avatar_url?: string };
-};
-
 type PublicProfileHeaderProps = {
-  user: User;
-  reviews: ReviewWithReviewer[];
+  /** Profil public (vue `public_profiles`) : jamais la table `users` d'un autre membre. */
+  user: PublicProfile;
+  reviews: Review[];
   listingsCount: number;
 };
 
@@ -25,10 +22,14 @@ export const PublicProfileHeader = React.memo<PublicProfileHeaderProps>(({
   const { colors } = useTheme();
   const { setPublicProfileHeaderHeight, safeAreaTop } = useHeaderHeightStore();
 
+  // La note est recalculée côté serveur (trigger sur reviews) : on affiche celle du profil.
+  const reviewCount = user.rating_count || reviews.length;
   const avgRating = useMemo(() => {
+    if (user.rating_count > 0) return Number(user.rating_avg).toFixed(1);
     if (reviews.length === 0) return null;
     return (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1);
-  }, [reviews]);
+  }, [user.rating_avg, user.rating_count, reviews]);
+  const isPrivate = user.profile_visibility === 'private';
 
   const hasBanner = !!user.banner_url;
 
@@ -92,18 +93,28 @@ export const PublicProfileHeader = React.memo<PublicProfileHeaderProps>(({
               </View>
             )}
             <View style={styles.profileInfo}>
-              <Text style={[styles.name, { color: colors.text }]}>{user.display_name}</Text>
-              <Text style={[styles.username, { color: colors.textSecondary }]}>@{user.username}</Text>
-              {reviews.length > 0 && avgRating && (
+              <View style={styles.nameRow}>
+                <Text style={[styles.name, { color: colors.text }]}>{user.display_name}</Text>
+                {user.is_verified && <ShieldCheck size={18} color={colors.primary} />}
+              </View>
+              {!!user.username && <Text style={[styles.username, { color: colors.textSecondary }]}>@{user.username}</Text>}
+              {reviewCount > 0 && avgRating && (
                 <View style={styles.rating}>
                   <Star size={16} color={colors.secondary} fill={colors.secondary} />
                   <Text style={[styles.ratingText, { color: colors.textSecondary }]}>
-                    {avgRating} · {reviews.length} avis
+                    {avgRating} · {reviewCount} avis
                   </Text>
                 </View>
               )}
             </View>
           </View>
+
+          {isPrivate && (
+            <View style={[styles.privateBox, { backgroundColor: colors.surfaceContainer }]}>
+              <Lock size={14} color={colors.textSecondary} />
+              <Text style={[styles.privateText, { color: colors.textSecondary }]}>Ce membre a rendu son profil privé.</Text>
+            </View>
+          )}
 
           {user.bio && (
             <Text style={[styles.bio, { color: colors.text }]}>{user.bio}</Text>
@@ -158,7 +169,7 @@ export const PublicProfileHeader = React.memo<PublicProfileHeaderProps>(({
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Annonces</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={[styles.statValue, { color: colors.secondary }]}>{reviews.length}</Text>
+              <Text style={[styles.statValue, { color: colors.secondary }]}>{reviewCount}</Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Avis</Text>
             </View>
             {avgRating && (
@@ -174,6 +185,8 @@ export const PublicProfileHeader = React.memo<PublicProfileHeaderProps>(({
     </View>
   );
 });
+
+PublicProfileHeader.displayName = 'PublicProfileHeader';
 
 const styles = StyleSheet.create({
   container: {
@@ -243,10 +256,27 @@ const styles = StyleSheet.create({
     flex: 1,
     marginTop: 8,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
   name: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 4,
+  },
+  privateBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  privateText: {
+    fontSize: 12,
   },
   username: {
     fontSize: 14,

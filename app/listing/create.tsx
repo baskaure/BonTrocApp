@@ -5,12 +5,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme';
-import { supabase } from '@/lib/supabase';
+import { supabase, errorMessage } from '@/lib/supabase';
+import { pickImages, uploadImage, removeStorageObject } from '@/lib/image';
+import { checkContent, blockedMessage } from '@/lib/moderation';
+import { useStore } from '@/lib/store';
+import { useCategories } from '@/lib/store/hooks';
 import { ArrowLeft, Upload, X } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormInput } from '@/components/ui/FormInput';
 import { createListingSchema, CreateListingFormData } from '@/lib/validations/listing';
-import * as ImagePicker from 'expo-image-picker';
 
 export default function CreateListingScreen() {
   const router = useRouter();
@@ -20,6 +23,7 @@ export default function CreateListingScreen() {
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [images, setImages] = useState<string[]>([]);
+  const { categories } = useCategories();
 
   const {
     control,
@@ -35,6 +39,7 @@ export default function CreateListingScreen() {
       description_offer: '',
       desired_exchange_desc: '',
       mode: 'both',
+      category_id: '',
       estimation_min: '',
       estimation_max: '',
     },
@@ -43,66 +48,36 @@ export default function CreateListingScreen() {
   const formValues = watch();
 
   const pickImage = async () => {
+    if (!user) return;
     if (images.length >= 5) {
       Alert.alert('Limite atteinte', 'Vous ne pouvez ajouter que 5 photos maximum');
       return;
     }
 
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour accéder aux photos');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      // @ts-ignore - MediaTypeOptions est déprécié mais fonctionne toujours
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      quality: 0.8,
-      selectionLimit: 5 - images.length,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
+    setError('');
+    try {
+      const assets = await pickImages({ max: 5 - images.length });
+      if (assets.length === 0) return;
       setUploading(true);
-      setError('');
-
-      try {
-        const uploadPromises = result.assets.map(async (asset) => {
-          const ext = asset.uri.split('.').pop() || 'jpg';
-          const fileName = `${user?.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-
-          const response = await fetch(asset.uri);
-          const blob = await response.blob();
-
-          const { error: uploadError } = await supabase.storage
-            .from('listing-media')
-            .upload(`images/${fileName}`, blob, {
-              contentType: `image/${ext}`,
-              cacheControl: '3600',
-            });
-
-          if (uploadError) throw uploadError;
-
-          const { data } = supabase.storage.from('listing-media').getPublicUrl(`images/${fileName}`);
-          if (!data?.publicUrl) throw new Error("Impossible de récupérer l'URL publique");
-
-          return data.publicUrl;
-        });
-
-        const uploadedUrls = await Promise.all(uploadPromises);
-        setImages([...images, ...uploadedUrls]);
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || "Échec du téléversement des images");
-        Alert.alert('Erreur', err.message || "Échec du téléversement des images");
-      } finally {
-        setUploading(false);
+      // Redimensionnées et converties en JPEG avant envoi ; chemin images/<user_id>-… exigé par la policy.
+      const uploaded: string[] = [];
+      for (const asset of assets) {
+        uploaded.push(await uploadImage({ bucket: 'listing-media', folder: 'images', userId: user.id, asset }));
       }
+      setImages((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      const message = errorMessage(err, 'Échec du téléversement des images');
+      setError(message);
+      Alert.alert('Erreur', message);
+    } finally {
+      setUploading(false);
     }
   };
 
   const removeImage = (index: number) => {
+    const url = images[index];
     setImages(images.filter((_, i) => i !== index));
+    void removeStorageObject('listing-media', url);
   };
 
   const onSubmit = async (data: CreateListingFormData) => {
@@ -112,53 +87,54 @@ export default function CreateListingScreen() {
     setLoading(true);
 
     try {
+      // Le serveur bloque les termes interdits (trigger moderate_row) ; on prévient avant l'envoi.
+      const moderation = await checkContent(`${data.title}\n${data.description_offer}\n${data.desired_exchange_desc}`, user.id);
+      if (moderation.hasBlock) {
+        setError(blockedMessage(moderation, 'Votre annonce'));
+        return;
+      }
+
       const { data: listingData, error: insertError } = await supabase
         .from('listings')
         .insert({
           user_id: user.id,
           type: data.type,
-          title: data.title,
-          description_offer: data.description_offer,
-          desired_exchange_desc: data.desired_exchange_desc,
+          title: data.title.trim(),
+          description_offer: data.description_offer.trim(),
+          desired_exchange_desc: data.desired_exchange_desc.trim(),
           mode: data.mode,
+          category_id: data.category_id || null,
           estimation_min: data.estimation_min ? parseFloat(data.estimation_min) : null,
           estimation_max: data.estimation_max ? parseFloat(data.estimation_max) : null,
           status: 'published',
-          location_lat: user.geo_lat,
-          location_lng: user.geo_lng,
+          location_lat: user.geo_lat ?? null,
+          location_lng: user.geo_lng ?? null,
         })
         .select('id')
         .single();
 
       if (insertError) throw insertError;
 
-      // Upload des images
+      // Médias (l'URL doit pointer vers notre bucket : contrainte listing_media_url_allowed)
       if (listingData?.id && images.length > 0) {
-        const mediaPromises = images.map((url, index) =>
-          supabase.from('listing_media').insert({
-            listing_id: listingData.id,
-            url: url,
-            type: 'image',
-            sort_order: index,
-          })
+        const { error: mediaError } = await supabase.from('listing_media').insert(
+          images.map((url, index) => ({ listing_id: listingData.id, url, type: 'image', sort_order: index })),
         );
-
-        const results = await Promise.all(mediaPromises);
-        const hasError = results.some(({ error }) => error);
-        if (hasError) {
-          console.error('Erreur lors de l\'upload des médias');
-        }
+        if (mediaError) console.error('Erreur lors de l’enregistrement des médias :', mediaError.message);
       }
 
-      Alert.alert('Succès', 'Annonce créée avec succès !', [
+      useStore.getState().invalidateListings();
+
+      Alert.alert('Succès', 'Annonce publiée !', [
         {
           text: 'OK',
-          onPress: () => router.replace(`/listing/${listingData.id}`),
+          onPress: () => router.replace({ pathname: '/listing/[id]', params: { id: listingData.id } }),
         },
       ]);
-    } catch (err: any) {
-      setError(err.message || 'Une erreur est survenue');
-      Alert.alert('Erreur', err.message || 'Une erreur est survenue');
+    } catch (err) {
+      const message = errorMessage(err, 'Une erreur est survenue');
+      setError(message);
+      Alert.alert('Erreur', message);
     } finally {
       setLoading(false);
     }
@@ -214,13 +190,13 @@ export default function CreateListingScreen() {
             </View>
             {images.length === 0 && (
               <Text style={[styles.helperText, { color: colors.textTertiary }]}>
-                Ajoutez jusqu'à 5 photos pour illustrer votre annonce
+                Ajoutez jusqu’à 5 photos pour illustrer votre annonce
               </Text>
             )}
           </View>
 
           <View style={styles.section}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Type d'annonce</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Type d’annonce</Text>
             <View style={styles.radioGroup}>
               {(['service', 'product'] as const).map((type) => (
                 <TouchableOpacity
@@ -246,6 +222,32 @@ export default function CreateListingScreen() {
             </View>
           </View>
 
+          {categories.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Catégorie</Text>
+              <View style={styles.chips}>
+                {categories.map((category) => {
+                  const active = formValues.category_id === category.id;
+                  return (
+                    <TouchableOpacity
+                      key={category.id}
+                      style={[
+                        styles.chip,
+                        { borderColor: colors.border, backgroundColor: colors.surface },
+                        active && { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+                      ]}
+                      onPress={() => setValue('category_id', active ? '' : category.id)}
+                    >
+                      <Text style={[styles.chipText, { color: colors.textSecondary }, active && { color: colors.primary, fontWeight: '700' }]}>
+                        {category.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
           <FormInput
             control={control}
             name="title"
@@ -255,6 +257,7 @@ export default function CreateListingScreen() {
               placeholder: 'Ex: Cours de guitare débutant',
               returnKeyType: 'next',
               blurOnSubmit: false,
+              maxLength: 120,
             }}
           />
 
@@ -292,7 +295,7 @@ export default function CreateListingScreen() {
           />
 
           <View style={styles.section}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Mode d'échange</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Mode d’échange</Text>
             <View style={styles.modeButtons}>
               {(['both', 'on_site', 'remote'] as const).map((mode) => (
                 <TouchableOpacity
@@ -342,7 +345,7 @@ export default function CreateListingScreen() {
           {loading ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.submitButtonText}>Publier l'annonce</Text>
+            <Text style={styles.submitButtonText}>Publier l’annonce</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -470,6 +473,20 @@ const styles = StyleSheet.create({
   },
   modeButtonText: {
     fontSize: 14,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontSize: 13,
   },
   errorContainer: {
     padding: 12,

@@ -1,159 +1,50 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Bell, Mail, CheckCircle, MessageCircle, Package, Star } from 'lucide-react-native';
+import { ArrowLeft, Bell, Mail, CheckCircle, MessageCircle, Package, Star, FileSignature, XCircle } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
-import { supabase, Notification } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
+import { useActivityStore, ActivityItem } from '@/lib/activity';
 
-export default function NotificationsScreen() {
+/**
+ * Fil d'activité : calculé à partir des propositions, échanges et messages (voir lib/activity.ts).
+ * Il remplace l'ancienne table `notifications`, absente des migrations du site.
+ */
+export default function ActivityScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const { colors } = useTheme();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const items = useActivityStore((s) => s.items);
+  const loading = useActivityStore((s) => s.loading);
+  const refresh = useActivityStore((s) => s.refresh);
+  const markSeen = useActivityStore((s) => s.markSeen);
+  const markAllSeen = useActivityStore((s) => s.markAllSeen);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      loadNotifications();
-      subscribeToNotifications();
-    }
-  }, [user]);
+  const unreadCount = items.filter((i) => i.unread).length;
 
-  async function loadNotifications() {
+  const onRefresh = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) {
-        if (error.code === 'PGRST205') {
-          console.warn('Table notifications does not exist. Please run the SQL script to create it.');
-          setNotifications([]);
-          setUnreadCount(0);
-        } else {
-          console.error('Error loading notifications:', error);
-        }
-      } else if (data) {
-        setNotifications(data);
-        setUnreadCount(data.filter(n => !n.read_at).length);
-      }
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-      setNotifications([]);
-      setUnreadCount(0);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }
-
-  function subscribeToNotifications() {
-    if (!user) return;
-
-    const subscription = supabase
-      .channel(`notifications:${user.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`,
-      }, () => {
-        loadNotifications();
-      })
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }
-
-  async function markAsRead(notificationId: string) {
-    await supabase
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('id', notificationId);
-    loadNotifications();
-  }
-
-  async function markAllAsRead() {
-    if (!user) return;
-    await supabase
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('user_id', user.id)
-      .is('read_at', null);
-    loadNotifications();
-  }
-
-  const handleNotificationPress = (notification: Notification) => {
-    markAsRead(notification.id);
-
-    if (notification.type === 'proposal_received' && notification.related_id) {
-      router.push({
-        pathname: '/proposal/[id]',
-        params: { id: notification.related_id }
-      });
-    } else if (notification.type === 'proposal_accepted') {
-      router.push('/exchanges');
-    } else if (notification.type === 'message_received' && notification.related_id) {
-      router.push({
-        pathname: '/proposal/[id]',
-        params: { id: notification.related_id }
-      });
-    } else if (notification.type === 'exchange_update') {
-      router.push('/exchanges');
-    } else if (notification.type === 'review_received') {
-      router.push('/exchanges');
-    }
-    // Si related_id est null, on ne navigue pas (juste marquer comme lu)
-  };
-
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'proposal_received':
-        return Mail;
-      case 'proposal_accepted':
-        return CheckCircle;
-      case 'message_received':
-        return MessageCircle;
-      case 'exchange_update':
-        return Package;
-      case 'review_received':
-        return Star;
-      default:
-        return Bell;
-    }
-  };
-
-  const getNotificationTitle = (notification: Notification) => {
-    switch (notification.type) {
-      case 'proposal_received':
-        return 'Nouvelle proposition';
-      case 'proposal_accepted':
-        return 'Proposition acceptée';
-      case 'message_received':
-        return 'Nouveau message';
-      case 'exchange_update':
-        return 'Mise à jour d\'échange';
-      case 'review_received':
-        return 'Nouvel avis';
-      default:
-        return 'Notification';
-    }
-  };
-
-  const onRefresh = () => {
     setRefreshing(true);
-    loadNotifications();
+    await refresh(user.id);
+    setRefreshing(false);
+  }, [user, refresh]);
+
+  const handlePress = (item: ActivityItem) => {
+    if (!user) return;
+    void markSeen(user.id, item.key, item.at);
+    router.push(item.route);
+  };
+
+  const iconFor = (item: ActivityItem) => {
+    if (item.kind === 'proposal_received') return Mail;
+    if (item.kind === 'message') return MessageCircle;
+    if (item.kind === 'proposal_update') return item.title === 'Proposition refusée' ? XCircle : CheckCircle;
+    if (item.title === 'Contrat à signer') return FileSignature;
+    if (item.title === 'Laissez un avis') return Star;
+    if (item.title === 'Échange annulé') return XCircle;
+    return Package;
   };
 
   if (!user) {
@@ -168,88 +59,72 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
           <ArrowLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
-        {unreadCount > 0 && (
-          <TouchableOpacity onPress={markAllAsRead} style={styles.markAllButton}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Activité</Text>
+        {unreadCount > 0 ? (
+          <TouchableOpacity onPress={() => void markAllSeen(user.id)} style={styles.markAllButton}>
             <Text style={[styles.markAllText, { color: colors.primary }]}>Tout marquer comme lu</Text>
           </TouchableOpacity>
+        ) : (
+          <View style={{ width: 100 }} />
         )}
-        {unreadCount === 0 && <View style={{ width: 100 }} />}
       </View>
 
-      {/* Content */}
-      {loading ? (
+      {loading && items.length === 0 ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      ) : notifications.length === 0 ? (
-        <View style={styles.centerContainer}>
+      ) : items.length === 0 ? (
+        <ScrollView
+          contentContainerStyle={styles.centerContainer}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        >
           <Bell size={64} color={colors.border} />
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Aucune notification</Text>
-        </View>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Rien de nouveau pour le moment</Text>
+        </ScrollView>
       ) : (
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-            />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         >
-          {notifications.map((notification) => (
-            <TouchableOpacity
-              key={notification.id}
-              style={[
-                styles.notificationItem,
-                { 
-                  borderBottomColor: colors.border,
-                  backgroundColor: notification.read_at ? colors.background : colors.primaryLight + '20',
-                }
-              ]}
-              onPress={() => handleNotificationPress(notification)}
-            >
-              {(() => {
-                const Icon = getNotificationIcon(notification.type);
-                return (
-                  <View style={[styles.notificationIcon, { backgroundColor: colors.primaryLight }]}>
-                    <Icon size={22} color={colors.primary} />
-                  </View>
-                );
-              })()}
-              <View style={styles.notificationContent}>
-                <View style={styles.notificationHeader}>
-                  <Text style={[styles.notificationTitle, { color: colors.text }]}>
-                    {getNotificationTitle(notification)}
-                  </Text>
-                  {!notification.read_at && (
-                    <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
-                  )}
+          {items.map((item) => {
+            const Icon = iconFor(item);
+            return (
+              <TouchableOpacity
+                key={item.key}
+                style={[
+                  styles.notificationItem,
+                  {
+                    borderBottomColor: colors.border,
+                    backgroundColor: item.unread ? colors.primaryLight + '20' : colors.background,
+                  },
+                ]}
+                onPress={() => handlePress(item)}
+              >
+                <View style={[styles.notificationIcon, { backgroundColor: item.actionable ? colors.secondaryLight : colors.primaryLight }]}>
+                  <Icon size={22} color={item.actionable ? colors.warning : colors.primary} />
                 </View>
-                <Text style={[styles.notificationMessage, { color: colors.textSecondary }]} numberOfLines={3}>
-                  {notification.message}
-                </Text>
-                <Text style={[styles.notificationTime, { color: colors.textTertiary }]}>
-                  {new Date(notification.created_at).toLocaleDateString('fr-FR', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+                <View style={styles.notificationContent}>
+                  <View style={styles.notificationHeader}>
+                    <Text style={[styles.notificationTitle, { color: colors.text }]}>{item.title}</Text>
+                    {item.unread && <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />}
+                  </View>
+                  <Text style={[styles.notificationMessage, { color: colors.textSecondary }]} numberOfLines={3}>
+                    {item.message}
+                  </Text>
+                  <Text style={[styles.notificationTime, { color: colors.textTertiary }]}>
+                    {new Date(item.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       )}
-
     </SafeAreaView>
   );
 }
@@ -311,9 +186,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  notificationIconText: {
-    fontSize: 24,
-  },
   notificationContent: {
     flex: 1,
   },
@@ -343,4 +215,3 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 });
-

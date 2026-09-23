@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/lib/theme';
-import { ArrowLeft, MapPin, Star, TrendingUp, Sparkles, Shield, MessageCircle, Pencil, Trash2, Calendar, Flag } from 'lucide-react-native';
-import { Listing, Review } from '@/lib/supabase';
+import { ArrowLeft, Star } from 'lucide-react-native';
+import { Listing, supabase } from '@/lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser, useReviews } from '@/lib/store/hooks';
-import { supabase } from '@/lib/supabase';
+import { LISTING_SELECT } from '@/lib/queries';
 import { ListingCard } from '@/components/ListingCard';
 import { PublicProfileHeader } from '@/components/PublicProfileHeader';
 import { useHeaderHeightStore } from '@/lib/store/headerHeight';
@@ -18,10 +18,10 @@ export default function PublicProfileScreen() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [listingsLoading, setListingsLoading] = useState(false);
 
-  // Utiliser le store pour charger l'utilisateur et les reviews
+  // Profil public (vue public_profiles) et avis reçus, via le store
   const { user, loading: userLoading } = useUser(id || null, { autoLoad: !!id });
   const { reviews, loading: reviewsLoading } = useReviews(id || null, { autoLoad: !!id });
-  
+
   // Récupérer la hauteur dynamique du header (hauteur totale avec safe area)
   const { publicProfileHeaderTotalHeight } = useHeaderHeightStore();
 
@@ -37,12 +37,12 @@ export default function PublicProfileScreen() {
     try {
       const { data: listingsData } = await supabase
         .from('listings')
-        .select(`*, media:listing_media(*)`)
+        .select(LISTING_SELECT)
         .eq('user_id', id)
         .eq('status', 'published')
         .order('created_at', { ascending: false });
 
-      if (listingsData) setListings(listingsData);
+      if (listingsData) setListings(listingsData as unknown as Listing[]);
     } catch (err) {
       console.error('Error loading listings:', err);
     } finally {
@@ -60,7 +60,7 @@ export default function PublicProfileScreen() {
     );
   }
 
-  if (!user) {
+  if (!user || user.status === 'deleted') {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -68,7 +68,9 @@ export default function PublicProfileScreen() {
         <Text style={[styles.backButtonText, { color: colors.textSecondary }]}>Retour</Text>
       </TouchableOpacity>
       <View style={styles.centerContainer}>
-        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Utilisateur non trouvé</Text>
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          {user ? 'Ce compte a été supprimé.' : 'Utilisateur non trouvé'}
+        </Text>
       </View>
     </SafeAreaView>
     );

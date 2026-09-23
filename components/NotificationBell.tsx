@@ -1,55 +1,20 @@
-import { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
-import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
-import { useUnreadCount } from '@/lib/store/hooks';
+import { useActivityBadges } from '@/hooks/useActivity';
 
 type NotificationBellProps = {
   onPress?: () => void;
 };
 
+/** Cloche d'activité : compte les éléments non lus (propositions, échanges, messages). */
 export function NotificationBell({ onPress }: NotificationBellProps) {
   const { user } = useAuth();
   const router = useRouter();
   const { colors } = useTheme();
-  const { count: unreadCount, refresh } = useUnreadCount(user?.id || null, { autoLoad: !!user });
-
-  useEffect(() => {
-    if (user) {
-      subscribeToNotifications();
-    }
-  }, [user]);
-
-  function subscribeToNotifications() {
-    if (!user) return;
-
-    const subscription = supabase
-      .channel(`notifications:${user.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`,
-      }, () => {
-        refresh();
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`,
-      }, () => {
-        refresh();
-      })
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }
+  const { unread } = useActivityBadges();
 
   if (!user) return null;
 
@@ -57,6 +22,7 @@ export function NotificationBell({ onPress }: NotificationBellProps) {
     <TouchableOpacity
       style={styles.bellContainer}
       hitSlop={8}
+      accessibilityLabel={unread > 0 ? `Activité, ${unread} non lus` : 'Activité'}
       onPress={() => {
         if (onPress) {
           onPress();
@@ -66,11 +32,9 @@ export function NotificationBell({ onPress }: NotificationBellProps) {
       }}
     >
       <Bell size={24} color={colors.textSecondary} />
-      {unreadCount > 0 && (
+      {unread > 0 && (
         <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.background }]}>
-          <Text style={styles.badgeText}>
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </Text>
+          <Text style={styles.badgeText}>{unread > 99 ? '99+' : unread}</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -100,4 +64,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-

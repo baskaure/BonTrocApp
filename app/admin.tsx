@@ -1,27 +1,33 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Image, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme, Theme } from '@/lib/theme';
-import { supabase } from '@/lib/supabase';
-import { Shield, Users, Flag, AlertTriangle, Loader2, Trash2, CheckCircle, XCircle, Eye, BarChart3, Download, Gavel, ArrowLeft } from 'lucide-react-native';
+import { supabase, User, UserRole, ListingStatus, errorMessage } from '@/lib/supabase';
+import { REPORT_REASON_LABEL, REPORT_STATUS_LABEL, LISTING_STATUS_LABEL } from '@/lib/labels';
+import { useStore } from '@/lib/store';
+import { Shield, Users, Flag, AlertTriangle, Trash2, CheckCircle, XCircle, Eye, BarChart3, Gavel, ArrowLeft, Ban } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Tab = 'reports' | 'users' | 'verification' | 'banned-words' | 'disputes' | 'stats';
 
+// Le staff lit la table `users` directement (policy « Staff can view all profiles ») : c'est le seul
+// écran où l'embed `users!…` reste valide.
 type Report = {
   id: string;
   reporter_id: string;
-  reported_user_id?: string;
-  listing_id?: string;
+  reported_user_id?: string | null;
+  listing_id?: string | null;
   reason: string;
-  details?: string;
-  status: string;
+  details?: string | null;
+  status: 'pending' | 'resolved' | 'dismissed';
   created_at: string;
-  reporter?: { display_name: string };
-  reported_user?: { display_name: string };
-  listing?: { id: string; title: string; status: string };
+  reporter?: { display_name: string } | null;
+  reported_user?: { id: string; display_name: string; role: UserRole; status?: string } | null;
+  listing?: { id: string; title: string; status: ListingStatus } | null;
 };
+
+const ROLE_LABEL: Record<UserRole, string> = { user: 'Membre', moderator: 'Modérateur', admin: 'Admin', banned: 'Banni' };
 
 export default function AdminScreen() {
   const { user } = useAuth();
@@ -32,9 +38,10 @@ export default function AdminScreen() {
   const [tab, setTab] = useState<Tab>('reports');
   const [loading, setLoading] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [userSearch, setUserSearch] = useState('');
-  const [verificationRequests, setVerificationRequests] = useState<any[]>([]);
+  const [verificationRequests, setVerificationRequests] = useState<User[]>([]);
+  const isAdmin = user?.role === 'admin';
   const [bannedWords, setBannedWords] = useState<{ id: string; word: string; severity: string }[]>([]);
   const [bannedWordsLoading, setBannedWordsLoading] = useState(false);
   const [newWord, setNewWord] = useState('');
@@ -79,41 +86,76 @@ export default function AdminScreen() {
     setLoading(false);
   }
 
+  /** Mutation vérifiée : la RLS peut renvoyer 0 ligne sans erreur. */
+  async function mutate(query: PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>, successMessage: string) {
+    try {
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error('Action refusée (droits insuffisants ou élément modifié entre-temps).');
+      Alert.alert('Administration', successMessage);
+      return true;
+    } catch (err) {
+      Alert.alert('Erreur', errorMessage(err));
+      return false;
+    }
+  }
+
   async function loadReports() {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('reports')
       .select(`
         *,
         reporter:users!reports_reporter_id_fkey(display_name),
-        reported_user:users!reports_reported_user_id_fkey(display_name),
+        reported_user:users!reports_reported_user_id_fkey(id, display_name, role, status),
         listing:listings(id, title, status)
       `)
-      .order('created_at', { ascending: false });
-    if (data) setReports(data);
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) Alert.alert('Erreur', errorMessage(error));
+    if (data) setReports(data as unknown as Report[]);
     setLoading(false);
   }
 
   async function loadUsers() {
     setLoading(true);
     let query = supabase.from('users').select('*').order('created_at', { ascending: false });
-    if (userSearch) {
-      query = query.or(`display_name.ilike.%${userSearch}%,email.ilike.%${userSearch}%,username.ilike.%${userSearch}%`);
+    const q = userSearch.replace(/[,()"\\%]/g, ' ').trim();
+    if (q) {
+      query = query.or(`display_name.ilike.%${q}%,email.ilike.%${q}%,username.ilike.%${q}%`);
     }
-    const { data } = await query.limit(50);
-    if (data) setUsers(data);
+    const { data, error } = await query.limit(50);
+    if (error) Alert.alert('Erreur', errorMessage(error));
+    if (data) setUsers(data as User[]);
     setLoading(false);
   }
 
   async function loadVerificationRequests() {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('verification_status', 'pending')
-      .order('created_at', { ascending: false });
-    if (data) setVerificationRequests(data);
+      .order('verification_submitted_at', { ascending: false });
+    if (error) Alert.alert('Erreur', errorMessage(error));
+    if (data) setVerificationRequests(data as User[]);
     setLoading(false);
+  }
+
+  /** Lien temporaire (5 min) vers la pièce d'identité, dans le bucket privé `verification-documents`. */
+  async function openVerificationDocument(target: User) {
+    const raw = target.verification_document_url;
+    if (!raw) {
+      Alert.alert('Document', 'Aucun document joint à cette demande.');
+      return;
+    }
+    const path = raw.startsWith('http') ? decodeURIComponent(raw.split('/verification-documents/')[1] ?? '') : raw;
+    const { data, error } = await supabase.storage.from('verification-documents').createSignedUrl(path, 300);
+    if (error || !data?.signedUrl) {
+      Alert.alert('Erreur', errorMessage(error, 'Document inaccessible'));
+      return;
+    }
+    await Linking.openURL(data.signedUrl);
   }
 
   async function loadBannedWords() {
@@ -126,53 +168,85 @@ export default function AdminScreen() {
   async function loadDisputes() {
     setLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('disputes')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (data) {
-        const enriched = await Promise.all(
-          data.map(async (dispute) => {
-            const { data: openedBy } = await supabase
-              .from('users')
-              .select('display_name, email')
-              .eq('id', dispute.opened_by)
-              .maybeSingle();
-
-            return { ...dispute, opened_by_user: openedBy };
-          })
-        );
-        setDisputes(enriched);
-      }
+        .select('*, opened_by_user:users!disputes_opened_by_fkey(display_name, email)')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      setDisputes(data ?? []);
     } catch (err) {
       console.error('Error loading disputes:', err);
+      Alert.alert('Erreur', errorMessage(err, 'Litiges indisponibles'));
     } finally {
       setLoading(false);
     }
   }
 
   async function handleReportStatus(reportId: string, status: 'resolved' | 'dismissed') {
-    await supabase.from('reports').update({
-      status,
-      moderator_id: user?.id,
-      resolved_at: new Date().toISOString()
-    }).eq('id', reportId);
-    loadReports();
+    const ok = await mutate(
+      supabase.from('reports').update({ status, moderator_id: user?.id, resolved_at: new Date().toISOString() }).eq('id', reportId).select('id'),
+      status === 'resolved' ? 'Signalement résolu.' : 'Signalement rejeté.',
+    );
+    if (ok) loadReports();
+  }
+
+  /** Suspension / remise en ligne d'une annonce signalée (policy « Staff can moderate listings »). */
+  async function setListingStatus(listingId: string, status: 'suspended' | 'published') {
+    const ok = await mutate(
+      supabase.from('listings').update({ status, updated_at: new Date().toISOString() }).eq('id', listingId).select('id'),
+      status === 'suspended' ? 'Annonce suspendue.' : 'Annonce remise en ligne.',
+    );
+    if (ok) {
+      useStore.getState().invalidateListings();
+      loadReports();
+    }
+  }
+
+  /** Bannissement (admin uniquement : le trigger gèle `role` pour les autres). Le serveur suspend ses annonces et annule ses propositions. */
+  function banUser(target: { id: string; display_name: string }) {
+    if (!isAdmin) return;
+    Alert.alert('Bannir ce membre ?', `${target.display_name} ne pourra plus se connecter. Ses annonces seront suspendues et ses propositions annulées.`, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Bannir',
+        style: 'destructive',
+        onPress: async () => {
+          const ok = await mutate(supabase.from('users').update({ role: 'banned' }).eq('id', target.id).select('id'), 'Membre banni.');
+          if (ok) {
+            loadReports();
+            if (tab === 'users') loadUsers();
+          }
+        },
+      },
+    ]);
   }
 
   async function handleVerification(userId: string, status: 'verified' | 'rejected') {
-    await supabase.from('users').update({
-      verification_status: status,
-      verification_reviewed_at: new Date().toISOString(),
-      is_verified: status === 'verified',
-    }).eq('id', userId);
-    loadVerificationRequests();
+    const ok = await mutate(
+      supabase
+        .from('users')
+        .update({ verification_status: status, verification_reviewed_at: new Date().toISOString(), is_verified: status === 'verified' })
+        .eq('id', userId)
+        .select('id'),
+      status === 'verified' ? 'Profil vérifié.' : 'Vérification refusée.',
+    );
+    if (ok) loadVerificationRequests();
   }
 
-  async function handleUserRole(userId: string, role: 'user' | 'moderator' | 'admin') {
-    await supabase.from('users').update({ role }).eq('id', userId);
-    loadUsers();
+  function handleUserRole(target: User, role: UserRole) {
+    if (!isAdmin || target.id === user?.id || target.role === role) return;
+    Alert.alert(`Passer ${target.display_name} en « ${ROLE_LABEL[role]} » ?`, undefined, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Confirmer',
+        style: role === 'banned' ? 'destructive' : 'default',
+        onPress: async () => {
+          const ok = await mutate(supabase.from('users').update({ role }).eq('id', target.id).select('id'), 'Rôle mis à jour.');
+          if (ok) loadUsers();
+        },
+      },
+    ]);
   }
 
   async function addBannedWord() {
@@ -201,14 +275,14 @@ export default function AdminScreen() {
   async function handleDisputeStatus(disputeId: string, status: 'open' | 'in_review' | 'resolved' | 'dismissed') {
     if (!user?.id) return;
 
-    const payload: any = { status };
+    const payload: Record<string, string> = { status };
     if (status === 'resolved' || status === 'dismissed') {
       payload.resolved_by = user.id;
       payload.resolved_at = new Date().toISOString();
     }
 
-    await supabase.from('disputes').update(payload).eq('id', disputeId);
-    loadDisputes();
+    const ok = await mutate(supabase.from('disputes').update(payload).eq('id', disputeId).select('id'), 'Litige mis à jour.');
+    if (ok) loadDisputes();
   }
 
   if (!user || !['admin', 'moderator'].includes(user.role)) {
@@ -288,31 +362,56 @@ export default function AdminScreen() {
                   <View key={report.id} style={styles.reportCard}>
                     <View style={styles.reportHeader}>
                       <View style={styles.reportBadge}>
-                        <Text style={styles.reportBadgeText}>{report.status}</Text>
+                        <Text style={styles.reportBadgeText}>{REPORT_STATUS_LABEL[report.status] ?? report.status}</Text>
                       </View>
                       {report.listing_id && (
                         <View style={styles.reportTypeBadge}>
                           <Text style={styles.reportTypeText}>Annonce</Text>
                         </View>
                       )}
+                      {!report.listing_id && report.reported_user_id && (
+                        <View style={styles.reportTypeBadge}>
+                          <Text style={styles.reportTypeText}>Membre</Text>
+                        </View>
+                      )}
                     </View>
-                    <Text style={styles.reportReason}>{report.reason}</Text>
+                    <Text style={styles.reportReason}>{REPORT_REASON_LABEL[report.reason] ?? report.reason}</Text>
                     {report.details && (
                       <Text style={styles.reportDetails}>{report.details}</Text>
                     )}
                     {report.listing && (
                       <View style={styles.reportListing}>
-                        <Text style={styles.reportListingTitle}>
-                          Annonce : {report.listing.title}
-                        </Text>
-                        <Text style={styles.reportListingStatus}>
-                          Statut : {report.listing.status}
-                        </Text>
+                        <TouchableOpacity onPress={() => router.push({ pathname: '/listing/[id]', params: { id: report.listing!.id } })}>
+                          <Text style={styles.reportListingTitle}>Annonce : {report.listing.title}</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.reportListingStatus}>Statut : {LISTING_STATUS_LABEL[report.listing.status] ?? report.listing.status}</Text>
+                        <View style={[styles.reportActions, { marginTop: 8 }]}>
+                          {report.listing.status === 'published' ? (
+                            <TouchableOpacity style={styles.reportActionButton} onPress={() => setListingStatus(report.listing!.id, 'suspended')}>
+                              <Eye size={16} color={colors.error} />
+                              <Text style={[styles.reportActionText, { color: colors.error }]}>Suspendre l’annonce</Text>
+                            </TouchableOpacity>
+                          ) : report.listing.status === 'suspended' ? (
+                            <TouchableOpacity style={styles.reportActionButton} onPress={() => setListingStatus(report.listing!.id, 'published')}>
+                              <Eye size={16} color={colors.success} />
+                              <Text style={[styles.reportActionText, { color: colors.success }]}>Remettre en ligne</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
                       </View>
                     )}
                     <Text style={styles.reportMeta}>
-                      Par {report.reporter?.display_name} • {new Date(report.created_at).toLocaleDateString('fr-FR')}
+                      Par {report.reporter?.display_name ?? 'membre inconnu'}
+                      {report.reported_user ? ` • contre ${report.reported_user.display_name}${report.reported_user.role === 'banned' ? ' (banni)' : ''}` : ''}
+                      {' • '}
+                      {new Date(report.created_at).toLocaleDateString('fr-FR')}
                     </Text>
+                    {isAdmin && report.reported_user && report.reported_user.role !== 'banned' && report.reported_user.status !== 'deleted' && (
+                      <TouchableOpacity style={[styles.reportActionButton, { marginBottom: 8 }]} onPress={() => banUser(report.reported_user!)}>
+                        <Ban size={16} color={colors.error} />
+                        <Text style={[styles.reportActionText, { color: colors.error }]}>Bannir {report.reported_user.display_name}</Text>
+                      </TouchableOpacity>
+                    )}
                     {report.status === 'pending' && (
                       <View style={styles.reportActions}>
                         <TouchableOpacity
@@ -357,6 +456,11 @@ export default function AdminScreen() {
                       <View style={styles.verificationInfo}>
                         <Text style={styles.verificationName}>{req.display_name}</Text>
                         <Text style={styles.verificationEmail}>@{req.username} • {req.email}</Text>
+                        <TouchableOpacity onPress={() => openVerificationDocument(req)} style={{ marginTop: 4 }}>
+                          <Text style={[styles.verificationEmail, { color: colors.primary, fontWeight: '600' }]}>
+                            {req.verification_document_url ? 'Voir le document' : 'Aucun document'}
+                          </Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
                     <View style={styles.verificationActions}>
@@ -395,34 +499,30 @@ export default function AdminScreen() {
                 </TouchableOpacity>
               </View>
               {users.map((u) => (
-                <View key={u.id} style={styles.userCard}>
+                <View key={u.id} style={[styles.userCard, (u.role === 'banned' || u.status === 'deleted') && { opacity: 0.6 }]}>
                   <View style={styles.userInfo}>
                     {u.is_verified && <CheckCircle size={16} color={colors.primary} />}
                     <Text style={styles.userName}>{u.display_name}</Text>
                     <Text style={styles.userUsername}>@{u.username}</Text>
+                    {u.status === 'deleted' && <Text style={[styles.userUsername, { color: colors.error }]}>· supprimé</Text>}
                   </View>
+                  <Text style={[styles.userUsername, { marginBottom: 8 }]}>{u.email}</Text>
                   <View style={styles.userRoleContainer}>
-                    <Text style={styles.userRoleLabel}>Rôle:</Text>
+                    <Text style={styles.userRoleLabel}>Rôle :</Text>
                     <View style={styles.userRoleButtons}>
-                      {['user', 'moderator', 'admin'].map((role) => (
+                      {(isAdmin ? (['user', 'moderator', 'admin', 'banned'] as UserRole[]) : ([u.role] as UserRole[])).map((role) => (
                         <TouchableOpacity
                           key={role}
                           style={[
                             styles.userRoleButton,
                             u.role === role && styles.userRoleButtonActive,
-                            u.id === user?.id && styles.userRoleButtonDisabled,
+                            u.role === role && role === 'banned' && { backgroundColor: colors.error, borderColor: colors.error },
+                            (u.id === user?.id || !isAdmin) && styles.userRoleButtonDisabled,
                           ]}
-                          onPress={() => handleUserRole(u.id, role as any)}
-                          disabled={u.id === user?.id}
+                          onPress={() => handleUserRole(u, role)}
+                          disabled={u.id === user?.id || !isAdmin}
                         >
-                          <Text
-                            style={[
-                              styles.userRoleButtonText,
-                              u.role === role && styles.userRoleButtonTextActive,
-                            ]}
-                          >
-                            {role === 'user' ? 'User' : role === 'moderator' ? 'Mod' : 'Admin'}
-                          </Text>
+                          <Text style={[styles.userRoleButtonText, u.role === role && styles.userRoleButtonTextActive]}>{ROLE_LABEL[role]}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>

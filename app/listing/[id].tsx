@@ -5,25 +5,33 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTheme } from '@/lib/theme';
 import { useAuth } from '@/lib/auth-context';
-import { supabase, Listing } from '@/lib/supabase';
-import { ArrowLeft, MapPin, Star, TrendingUp, Sparkles, Shield, MessageCircle, Pencil, Trash2, Calendar, Flag } from 'lucide-react-native';
+import { supabase, Listing, errorMessage } from '@/lib/supabase';
+import { LISTING_SELECT } from '@/lib/queries';
+import { pickImages, uploadImage, removeStorageObject } from '@/lib/image';
+import { checkContent, blockedMessage } from '@/lib/moderation';
+import { sendTransactionalEmail } from '@/lib/notifications';
+import { LISTING_STATUS_LABEL, MODE_LABEL } from '@/lib/labels';
+import { useStore } from '@/lib/store';
+import { useCategories } from '@/lib/store/hooks';
+import { useActivityStore } from '@/lib/activity';
+import { ArrowLeft, MapPin, Star, TrendingUp, Sparkles, Shield, MessageCircle, Pencil, Trash2, Calendar, Flag, Tag, X } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ReportModal } from '@/components/ReportModal';
 import { FormInput } from '@/components/ui/FormInput';
 import { proposalSchema, ProposalFormData } from '@/lib/validations/proposal';
-import * as ImagePicker from 'expo-image-picker';
-import { X } from 'lucide-react-native';
 
 export default function ListingDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors, radius, shadows } = useTheme();
   const { user } = useAuth();
+  const { categories } = useCategories();
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProposalForm, setShowProposalForm] = useState(false);
   const [proposalLoading, setProposalLoading] = useState(false);
   const [proposalError, setProposalError] = useState('');
+  const [existingProposalId, setExistingProposalId] = useState<string | null>(null);
 
   const proposalForm = useForm<ProposalFormData>({
     resolver: zodResolver(proposalSchema),
@@ -43,6 +51,7 @@ export default function ListingDetailScreen() {
     description_offer: '',
     desired_exchange_desc: '',
     mode: 'both' as 'remote' | 'on_site' | 'both',
+    category_id: '',
     estimation_min: '',
     estimation_max: '',
   });
@@ -51,35 +60,46 @@ export default function ListingDetailScreen() {
     if (id) {
       loadListing();
     }
-  }, [id]);
+  }, [id, user?.id]);
+
+  const formFromListing = (data: Listing) => ({
+    type: data.type,
+    title: data.title,
+    description_offer: data.description_offer,
+    desired_exchange_desc: data.desired_exchange_desc,
+    mode: data.mode,
+    category_id: data.category_id ?? '',
+    estimation_min: data.estimation_min?.toString() || '',
+    estimation_max: data.estimation_max?.toString() || '',
+  });
 
   async function loadListing() {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('listings')
-        .select(`
-          *,
-          user:users(*),
-          media:listing_media(*)
-        `)
-        .eq('id', id)
-        .single();
-
+      const { data, error } = await supabase.from('listings').select(LISTING_SELECT).eq('id', id).maybeSingle();
       if (error) throw error;
-      setListing(data);
-      
-      if (data) {
-        setEditForm({
-          type: data.type,
-          title: data.title,
-          description_offer: data.description_offer,
-          desired_exchange_desc: data.desired_exchange_desc,
-          mode: data.mode,
-          estimation_min: data.estimation_min?.toString() || '',
-          estimation_max: data.estimation_max?.toString() || '',
-        });
-        setImages(data.media?.map((m: any) => m.url) || []);
+      const loaded = (data as unknown as Listing) ?? null;
+      setListing(loaded);
+
+      if (loaded) {
+        setEditForm(formFromListing(loaded));
+        setImages(loaded.media?.map((m) => m.url) || []);
+
+        if (user && user.id !== loaded.user_id) {
+          // Compteur de vues côté serveur (RPC), et proposition déjà ouverte par ce membre ?
+          void supabase.rpc('increment_listing_views', { p_listing_id: loaded.id });
+          const { data: existing } = await supabase
+            .from('proposals')
+            .select('id')
+            .eq('listing_id', loaded.id)
+            .eq('from_user_id', user.id)
+            .in('status', ['pending', 'countered'])
+            .is('parent_proposal_id', null)
+            .limit(1);
+          setExistingProposalId(existing?.[0]?.id ?? null);
+        } else {
+          setExistingProposalId(null);
+        }
       }
     } catch (err) {
       console.error('Error loading listing:', err);
@@ -91,76 +111,40 @@ export default function ListingDetailScreen() {
   }
 
   const pickImage = async () => {
+    if (!user) return;
     if (images.length >= 5) {
       Alert.alert('Limite atteinte', 'Vous ne pouvez ajouter que 5 photos maximum');
       return;
     }
 
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour accéder aux photos');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      // @ts-ignore - MediaTypeOptions est déprécié mais fonctionne toujours
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      quality: 0.8,
-      selectionLimit: 5 - images.length,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
+    setEditError('');
+    try {
+      const assets = await pickImages({ max: 5 - images.length });
+      if (assets.length === 0) return;
       setUploading(true);
-      setEditError('');
-
-      try {
-        const uploadPromises = result.assets.map(async (asset) => {
-          const ext = asset.uri.split('.').pop() || 'jpg';
-          const fileName = `${user?.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-
-          const response = await fetch(asset.uri);
-          const blob = await response.blob();
-
-          const { error: uploadError } = await supabase.storage
-            .from('listing-media')
-            .upload(`images/${fileName}`, blob, {
-              contentType: `image/${ext}`,
-              cacheControl: '3600',
-            });
-
-          if (uploadError) throw uploadError;
-
-          const { data } = supabase.storage.from('listing-media').getPublicUrl(`images/${fileName}`);
-          if (!data?.publicUrl) throw new Error("Impossible de récupérer l'URL publique");
-
-          return data.publicUrl;
-        });
-
-        const uploadedUrls = await Promise.all(uploadPromises);
-        setImages([...images, ...uploadedUrls]);
-      } catch (err: any) {
-        console.error(err);
-        setEditError(err.message || "Échec du téléversement des images");
-        Alert.alert('Erreur', err.message || "Échec du téléversement des images");
-      } finally {
-        setUploading(false);
+      const uploaded: string[] = [];
+      for (const asset of assets) {
+        uploaded.push(await uploadImage({ bucket: 'listing-media', folder: 'images', userId: user.id, asset }));
       }
+      setImages((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      const message = errorMessage(err, 'Échec du téléversement des images');
+      setEditError(message);
+      Alert.alert('Erreur', message);
+    } finally {
+      setUploading(false);
     }
   };
 
   const removeImage = async (index: number) => {
     const imageToRemove = images[index];
     setImages(images.filter((_, i) => i !== index));
-    
-    // Si l'image existe dans la base de données, la supprimer
+
+    // Si l'image existe dans la base de données, la supprimer (et son fichier)
     if (listing && imageToRemove) {
       try {
-        await supabase
-          .from('listing_media')
-          .delete()
-          .eq('listing_id', listing.id)
-          .eq('url', imageToRemove);
+        await supabase.from('listing_media').delete().eq('listing_id', listing.id).eq('url', imageToRemove);
+        await removeStorageObject('listing-media', imageToRemove);
       } catch (err) {
         console.error('Error removing image from database:', err);
       }
@@ -174,123 +158,128 @@ export default function ListingDetailScreen() {
     setProposalLoading(true);
 
     try {
+      const offer = formData.offer.trim();
+      const message = (formData.message ?? '').trim();
+      const moderation = await checkContent(`${offer}\n${message}`, user.id);
+      if (moderation.hasBlock) {
+        setProposalError(blockedMessage(moderation, 'Votre proposition'));
+        return;
+      }
+
       const { data: insertedProposal, error: insertError } = await supabase
         .from('proposals')
         .insert({
           listing_id: listing.id,
           from_user_id: user.id,
           to_user_id: listing.user_id,
-          message: formData.message,
-          offer_payload: { description: formData.offer },
+          message,
+          offer_payload: { description: offer },
           status: 'pending',
         })
-        .select()
+        .select('id')
         .single();
 
       if (insertError) throw insertError;
 
-      if (insertedProposal) {
-        const { data: notifData, error: notifError } = await supabase
-          .from('notifications')
-          .insert({
-            user_id: listing.user_id,
-            type: 'proposal_received',
-            message: `${user.display_name || user.username} vous a fait une proposition`,
-            related_id: insertedProposal.id,
-          })
-          .select();
+      void sendTransactionalEmail('new_proposal', listing.user_id, {
+        listing_title: listing.title,
+        proposer_name: user.display_name,
+        proposal_id: insertedProposal.id,
+      });
 
-        if (notifError && notifError.code !== 'PGRST205') {
-          console.error('Error creating proposal notification:', notifError);
-        }
-      }
+      useStore.getState().invalidateProposals(user.id);
+      void useActivityStore.getState().refresh(user.id);
 
       proposalForm.reset({ message: '', offer: '' });
       setShowProposalForm(false);
-      Alert.alert('Succès', 'Votre proposition a été envoyée !');
-      router.push(`/proposal/${insertedProposal!.id}`);
-    } catch (err: any) {
-      setProposalError(err.message || 'Une erreur est survenue');
+      setExistingProposalId(insertedProposal.id);
+      Alert.alert('Proposition envoyée', 'Vous serez prévenu de la réponse.');
+      router.push({ pathname: '/proposal/[id]', params: { id: insertedProposal.id } });
+    } catch (err) {
+      setProposalError(errorMessage(err, 'Impossible d’envoyer la proposition'));
     } finally {
       setProposalLoading(false);
     }
   };
 
   const handleUpdateListing = async () => {
-    if (!listing || !isOwnListing) return;
+    if (!listing || !isOwnListing || !user) return;
 
     setEditError('');
     setEditLoading(true);
 
     try {
-      const { error: updateError } = await supabase
+      const title = editForm.title.trim();
+      if (title.length < 3 || title.length > 120) throw new Error('Le titre doit faire entre 3 et 120 caractères.');
+      const moderation = await checkContent(`${title}\n${editForm.description_offer}\n${editForm.desired_exchange_desc}`, user.id);
+      if (moderation.hasBlock) {
+        setEditError(blockedMessage(moderation, 'Votre annonce'));
+        return;
+      }
+
+      const { data: updated, error: updateError } = await supabase
         .from('listings')
         .update({
           type: editForm.type,
-          title: editForm.title,
-          description_offer: editForm.description_offer,
-          desired_exchange_desc: editForm.desired_exchange_desc,
+          title,
+          description_offer: editForm.description_offer.trim(),
+          desired_exchange_desc: editForm.desired_exchange_desc.trim(),
           mode: editForm.mode,
+          category_id: editForm.category_id || null,
           estimation_min: editForm.estimation_min ? parseFloat(editForm.estimation_min) : null,
           estimation_max: editForm.estimation_max ? parseFloat(editForm.estimation_max) : null,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', listing.id)
-        .eq('user_id', user!.id);
+        .eq('user_id', user.id)
+        .select('id');
 
       if (updateError) throw updateError;
+      if (!updated?.length) throw new Error('Mise à jour refusée.');
 
-      // Mettre à jour les images
-      if (listing.id) {
-        // Supprimer toutes les anciennes images
-        await supabase
-          .from('listing_media')
-          .delete()
-          .eq('listing_id', listing.id);
-
-        // Ajouter les nouvelles images
-        if (images.length > 0) {
-          const mediaPromises = images.map((url, index) =>
-            supabase.from('listing_media').insert({
-              listing_id: listing.id,
-              url: url,
-              type: 'image',
-              sort_order: index,
-            })
-          );
-
-          await Promise.all(mediaPromises);
-        }
+      // Médias : on remplace la liste (les fichiers retirés ont déjà été supprimés du stockage)
+      await supabase.from('listing_media').delete().eq('listing_id', listing.id);
+      if (images.length > 0) {
+        const { error: mediaError } = await supabase.from('listing_media').insert(
+          images.map((url, index) => ({ listing_id: listing.id, url, type: 'image', sort_order: index })),
+        );
+        if (mediaError) throw mediaError;
       }
 
+      useStore.getState().invalidateListings();
       setEditMode(false);
       await loadListing();
-      Alert.alert('Succès', 'Annonce mise à jour avec succès !');
-    } catch (err: any) {
-      setEditError(err.message || 'Impossible de mettre à jour l\'annonce');
+      Alert.alert('Succès', 'Annonce mise à jour !');
+    } catch (err) {
+      setEditError(errorMessage(err, 'Impossible de mettre à jour l’annonce'));
     } finally {
       setEditLoading(false);
     }
   };
 
-  const handleDeleteListing = async () => {
-    if (!listing || !isOwnListing) return;
+  /** Comme sur le site : l'annonce est archivée (retirée du marché), pas supprimée, pour préserver les échanges liés. */
+  const handleArchiveListing = async () => {
+    if (!listing || !isOwnListing || !user) return;
 
     setDeleteLoading(true);
     setEditError('');
 
     try {
-      const { error: deleteError } = await supabase
+      const { data, error: updateError } = await supabase
         .from('listings')
-        .delete()
+        .update({ status: 'archived', updated_at: new Date().toISOString() })
         .eq('id', listing.id)
-        .eq('user_id', user!.id);
+        .eq('user_id', user.id)
+        .select('id');
 
-      if (deleteError) throw deleteError;
+      if (updateError) throw updateError;
+      if (!data?.length) throw new Error('Retrait refusé.');
 
-      Alert.alert('Succès', 'Annonce supprimée avec succès');
+      useStore.getState().invalidateListings();
+      Alert.alert('Annonce retirée', 'Elle n’est plus visible sur le marché.');
       router.back();
-    } catch (err: any) {
-      setEditError(err.message || 'Impossible de supprimer l\'annonce');
+    } catch (err) {
+      setEditError(errorMessage(err, 'Impossible de retirer l’annonce'));
       setDeleteLoading(false);
     }
   };
@@ -329,6 +318,9 @@ export default function ListingDetailScreen() {
 
   const imageUrl = images.length > 0 ? images[0] : 'https://images.pexels.com/photos/1181406/pexels-photo-1181406.jpeg?auto=compress&cs=tinysrgb&w=800';
   const isOwnListing = user?.id === listing.user_id;
+  const isPublished = listing.status === 'published';
+  const ownerInactive = !listing.user || listing.user.status === 'deleted';
+  const categoryName = listing.category?.name ?? categories.find((c) => c.id === listing.category_id)?.name;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -428,17 +420,26 @@ export default function ListingDetailScreen() {
             </View>
           </TouchableOpacity>
 
-          <View style={styles.badges}>
+          <View style={[styles.badges, { flexWrap: 'wrap' }]}>
             <View style={[styles.badge, { backgroundColor: listing.type === 'service' ? colors.primaryLight : colors.secondaryLight }]}>
               <Text style={[styles.badgeText, { color: listing.type === 'service' ? colors.primary : colors.secondary }]}>
                 {listing.type === 'service' ? 'Service' : 'Produit'}
               </Text>
             </View>
             <View style={[styles.badge, { backgroundColor: colors.surfaceContainer }]}>
-              <Text style={[styles.badgeText, { color: colors.textSecondary }]}>
-                {listing.mode === 'remote' ? 'Distance' : listing.mode === 'on_site' ? 'Présentiel' : 'Les deux'}
-              </Text>
+              <Text style={[styles.badgeText, { color: colors.textSecondary }]}>{MODE_LABEL[listing.mode]}</Text>
             </View>
+            {categoryName ? (
+              <View style={[styles.badge, styles.badgeRow, { backgroundColor: colors.surfaceContainer }]}>
+                <Tag size={12} color={colors.textSecondary} />
+                <Text style={[styles.badgeText, { color: colors.textSecondary }]}>{categoryName}</Text>
+              </View>
+            ) : null}
+            {!isPublished && (
+              <View style={[styles.badge, { backgroundColor: colors.errorLight }]}>
+                <Text style={[styles.badgeText, { color: colors.error }]}>{LISTING_STATUS_LABEL[listing.status]}</Text>
+              </View>
+            )}
           </View>
 
           {!editMode ? (
@@ -447,7 +448,7 @@ export default function ListingDetailScreen() {
                 <View style={[styles.offerBox, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
                   <View style={styles.offerHeader}>
                     <TrendingUp size={18} color={colors.primary} />
-                    <Text style={[styles.offerLabel, { color: colors.primary }]}>J'offre</Text>
+                    <Text style={[styles.offerLabel, { color: colors.primary }]}>J’offre</Text>
                   </View>
                   <Text style={[styles.offerText, { color: colors.text }]}>{listing.description_offer}</Text>
                 </View>
@@ -477,19 +478,55 @@ export default function ListingDetailScreen() {
                     onPress={() => setEditMode(true)}
                   >
                     <Pencil size={16} color={colors.primary} />
-                    <Text style={[styles.editButtonText, { color: colors.primary }]}>Modifier l'annonce</Text>
+                    <Text style={[styles.editButtonText, { color: colors.primary }]}>Modifier l’annonce</Text>
                   </TouchableOpacity>
+                  {isPublished && (
+                    <TouchableOpacity
+                      style={[styles.deleteButton, { borderColor: colors.error, backgroundColor: colors.surface }]}
+                      onPress={() => setShowDeleteConfirm(true)}
+                    >
+                      <Trash2 size={16} color={colors.error} />
+                      <Text style={[styles.deleteButtonText, { color: colors.error }]}>Retirer</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {isOwnListing && !isPublished && (
+                <View style={[styles.authPrompt, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.lg }, shadows.soft]}>
+                  <Text style={[styles.authPromptText, { color: colors.textSecondary }]}>
+                    {listing.status === 'suspended'
+                      ? 'Cette annonce a été suspendue par la modération. Elle n’est plus visible.'
+                      : 'Cette annonce est retirée du marché (archivée ou déjà échangée).'}
+                  </Text>
+                </View>
+              )}
+
+              {!isOwnListing && user && !isPublished && (
+                <View style={[styles.authPrompt, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.lg }, shadows.soft]}>
+                  <Text style={[styles.authPromptText, { color: colors.textSecondary }]}>
+                    Cette annonce n’est plus disponible : elle a été retirée ou déjà échangée.
+                  </Text>
+                </View>
+              )}
+
+              {!isOwnListing && user && isPublished && !ownerInactive && existingProposalId && (
+                <View style={styles.proposalActions}>
                   <TouchableOpacity
-                    style={[styles.deleteButton, { borderColor: colors.error, backgroundColor: colors.surface }]}
-                    onPress={() => setShowDeleteConfirm(true)}
+                    style={[styles.proposeButton, { backgroundColor: colors.primary }]}
+                    onPress={() => router.push({ pathname: '/proposal/[id]', params: { id: existingProposalId } })}
                   >
-                    <Trash2 size={16} color={colors.error} />
-                    <Text style={[styles.deleteButtonText, { color: colors.error }]}>Supprimer</Text>
+                    <MessageCircle size={20} color="#FFF" />
+                    <Text style={styles.proposeButtonText}>Voir ma proposition en cours</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.reportButton, { borderColor: colors.error }]} onPress={() => setShowReportModal(true)}>
+                    <Flag size={16} color={colors.error} />
+                    <Text style={[styles.reportButtonText, { color: colors.error }]}>Signaler</Text>
                   </TouchableOpacity>
                 </View>
               )}
 
-              {!isOwnListing && user && !showProposalForm && (
+              {!isOwnListing && user && isPublished && !ownerInactive && !existingProposalId && !showProposalForm && (
                 <View style={styles.proposalActions}>
                   <TouchableOpacity
                     style={[styles.proposeButton, { backgroundColor: colors.primary }]}
@@ -528,7 +565,7 @@ export default function ListingDetailScreen() {
                   <FormInput
                     control={proposalForm.control}
                     name="message"
-                    label="Message *"
+                    label="Message (facultatif)"
                     error={proposalForm.formState.errors.message}
                     inputProps={{
                       multiline: true,
@@ -624,16 +661,54 @@ export default function ListingDetailScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-                <View style={styles.formGroup}>
-                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Mode</Text>
-                  <View style={[styles.selectContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <Text style={[styles.selectText, { color: colors.text }]}>
-                      {editForm.mode === 'both' ? 'Les deux' :
-                       editForm.mode === 'remote' ? 'Distance' : 'Présentiel'}
-                    </Text>
-                  </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Mode d’échange</Text>
+                <View style={styles.radioGroup}>
+                  {(['both', 'on_site', 'remote'] as const).map((mode) => (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[
+                        styles.radioOption,
+                        { borderColor: colors.border },
+                        editForm.mode === mode && { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+                      ]}
+                      onPress={() => setEditForm({ ...editForm, mode })}
+                    >
+                      <Text style={[styles.radioText, { color: colors.textSecondary }, editForm.mode === mode && { color: colors.primary }]}>
+                        {mode === 'both' ? 'Les deux' : mode === 'on_site' ? 'Présentiel' : 'Distance'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               </View>
+
+              {categories.length > 0 && (
+                <View style={styles.formGroup}>
+                  <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Catégorie</Text>
+                  <View style={styles.chips}>
+                    {categories.map((category) => {
+                      const active = editForm.category_id === category.id;
+                      return (
+                        <TouchableOpacity
+                          key={category.id}
+                          style={[
+                            styles.chip,
+                            { borderColor: colors.border, backgroundColor: colors.surface },
+                            active && { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+                          ]}
+                          onPress={() => setEditForm({ ...editForm, category_id: active ? '' : category.id })}
+                        >
+                          <Text style={[styles.chipText, { color: colors.textSecondary }, active && { color: colors.primary, fontWeight: '700' }]}>
+                            {category.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
 
               <View style={styles.formGroup}>
                 <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Titre *</Text>
@@ -645,6 +720,7 @@ export default function ListingDetailScreen() {
                   placeholderTextColor={colors.textTertiary}
                   returnKeyType="next"
                   blurOnSubmit={false}
+                  maxLength={120}
                 />
               </View>
 
@@ -692,16 +768,8 @@ export default function ListingDetailScreen() {
                   style={[styles.cancelEditButton, { borderColor: colors.border, backgroundColor: colors.surface }]}
                   onPress={() => {
                     setEditMode(false);
-                    setEditForm({
-                      type: listing.type,
-                      title: listing.title,
-                      description_offer: listing.description_offer,
-                      desired_exchange_desc: listing.desired_exchange_desc,
-                      mode: listing.mode,
-                      estimation_min: listing.estimation_min?.toString() || '',
-                      estimation_max: listing.estimation_max?.toString() || '',
-                    });
-                    setImages(listing.media?.map((m: any) => m.url) || []);
+                    setEditForm(formFromListing(listing));
+                    setImages(listing.media?.map((m) => m.url) || []);
                   }}
                 >
                   <Text style={[styles.cancelEditText, { color: colors.text }]}>Annuler</Text>
@@ -724,12 +792,12 @@ export default function ListingDetailScreen() {
           {showDeleteConfirm && (
             <View style={[styles.deleteConfirmBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.deleteConfirmText, { color: colors.text }]}>
-                Cette action est irréversible. Confirmez la suppression de l'annonce.
+                Retirer cette annonce ? Elle ne sera plus visible sur le marché. Les échanges déjà engagés ne sont pas affectés.
               </Text>
               <View style={styles.deleteConfirmActions}>
                 <TouchableOpacity
                   style={[styles.deleteConfirmButton, { backgroundColor: colors.error }]}
-                  onPress={handleDeleteListing}
+                  onPress={handleArchiveListing}
                   disabled={deleteLoading}
                 >
                   {deleteLoading ? (
@@ -934,6 +1002,25 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontSize: 13,
   },
   section: {
     marginBottom: 20,

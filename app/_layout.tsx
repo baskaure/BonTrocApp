@@ -3,7 +3,7 @@ import 'react-native-url-polyfill/auto';
 import 'react-native-gesture-handler';
 
 import { useEffect, useState } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { Alert, AppState, type AppStateStatus } from 'react-native';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -14,6 +14,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { AppHeader } from '@/components/AppHeader';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeightStore } from '@/lib/store/headerHeight';
+import { useActivitySync } from '@/hooks/useActivity';
 
 // Empêcher le splash screen natif de se masquer automatiquement
 SplashScreen.preventAutoHideAsync();
@@ -24,11 +25,20 @@ function BottomNavWrapper() {
 }
 
 function RootLayoutNav() {
-  const { user, loading } = useAuth();
+  const { user, loading, authNotice, clearAuthNotice } = useAuth();
   const segments = useSegments();
   const pathname = usePathname();
   const router = useRouter();
   const [isReady, setIsReady] = useState(false);
+
+  // Activité (badges, fil) : chargée et tenue à jour une seule fois pour toute l'app.
+  useActivitySync();
+
+  // Compte suspendu / supprimé / profil introuvable : la session a été fermée, on explique pourquoi.
+  useEffect(() => {
+    if (!authNotice) return;
+    Alert.alert(authNotice.kind === 'info' ? 'BonTroc' : 'Connexion impossible', authNotice.message, [{ text: 'OK', onPress: clearAuthNotice }]);
+  }, [authNotice, clearAuthNotice]);
 
   // Gérer le splash screen
   useEffect(() => {

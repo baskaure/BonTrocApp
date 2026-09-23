@@ -25,7 +25,7 @@ export default function LandingScreen() {
             />
           </View>
           <View style={[styles.badge, { backgroundColor: colors.primaryLight }]}>
-            <Text style={[styles.badgeText, { color: colors.primary }]}>L'ÉCONOMIE CIRCULAIRE, VERSION PRO</Text>
+            <Text style={[styles.badgeText, { color: colors.primary }]}>L’ÉCONOMIE CIRCULAIRE, VERSION PRO</Text>
           </View>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Trouve le bon troc{'\n'}qui peut faire la différence
@@ -65,7 +65,7 @@ export default function LandingScreen() {
             activeOpacity={0.8}
           >
             <Text style={[styles.secondaryButtonText, { color: colors.primary }]}>
-              J'ai déjà un compte
+              J’ai déjà un compte
             </Text>
           </TouchableOpacity>
         </View>
